@@ -1,0 +1,14 @@
+[
+  {
+    "name": "mbs_certmanagement",
+    "target": "//java/com/google/mbs:certmanagement"
+  },
+  {
+    "name": "mbs_attestation_aws",
+    "target": "//java/com/google/mbs/attestationcollection/aws:aws"
+  },
+  {
+    "name": "mbs_nsm_jni_tar",
+    "target": "//java/com/google/mbs/attestationcollection/aws/jni:nsm_jni_tar"
+  }
+]

@@ -1,0 +1,14 @@
+# Bazel build outputs
+bazel-*
+
+# Common IDE and editor files
+.project
+.vscode/
+.idea/
+*.iml
+*~
+# IntelliJ
+.idea
+.bazelproject
+.ijwb/
+.aswb/

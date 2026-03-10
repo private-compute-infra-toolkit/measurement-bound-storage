@@ -1,0 +1,13 @@
+https://bcr.bazel.build/modules/rules_proto
+https://bcr.bazel.build/modules/rules_oci
+https://bcr.bazel.build/modules/rules_python
+https://bcr.bazel.build/modules/rules_kotlin
+https://bcr.bazel.build/modules/rules_shell
+https://bcr.bazel.build/modules/bazel_features
+https://bcr.bazel.build/modules/aspect_bazel_lib
+https://bcr.bazel.build/modules/jq.bzl
+https://bcr.bazel.build/modules/toolchains_protoc
+https://bcr.bazel.build/modules/apple_support
+https://bcr.bazel.build/modules/with_cfg.bzl
+https://bcr.bazel.build/modules/zlib/.*/patches/
+bazelbuild/bazel-skylib/

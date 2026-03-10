@@ -1,0 +1,26 @@
+{
+  "docker": {
+    "registry": {
+        "host": "",
+        "project": "",
+        "repository": ""
+    },
+    "images": {
+      "build-env": {
+        "packages": {
+          "tree": "2.1.*"
+        }
+      },
+      "build-env-debian": {
+        "packages": {
+          "tree": "2.1.*"
+        }
+      },
+      "build-env-rockylinux": {
+        "packages": {
+          "tree": "1.8.*"
+        }
+      }
+    }
+  }
+}
