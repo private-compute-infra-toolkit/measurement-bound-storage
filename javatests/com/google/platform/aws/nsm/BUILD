@@ -12,15 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_rust//rust:defs.bzl", "rust_static_library")
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
 
-package(default_visibility = ["//visibility:public"])
-
-rust_static_library(
-    name = "libnsm_static",
-    srcs = ["nsm-lib/src/lib.rs"],
+java_library(
+    name = "tests",
+    srcs = ["NitroSecurityModuleTest.java"],
     deps = [
-        "@crates//:aws-nitro-enclaves-nsm-api",
-        "@crates//:serde_bytes",
+        "//java/com/google/platform/aws/nsm",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
     ],
+)
+
+java_test(
+    name = "NitroSecurityModuleTest",
+    size = "small",
+    test_class = "com.google.platform.aws.nsm.NitroSecurityModuleTest",
+    runtime_deps = [":tests"],
 )

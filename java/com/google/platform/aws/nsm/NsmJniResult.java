@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.mbs.attestationcollection.aws.jni;
+package com.google.platform.aws.nsm;
 
 public class NsmJniResult {
   public static final int SUCCESS = 0;

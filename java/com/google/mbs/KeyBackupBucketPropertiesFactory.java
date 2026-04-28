@@ -18,21 +18,34 @@ package com.google.mbs;
 
 public class KeyBackupBucketPropertiesFactory {
 
-  private static final String S3_KMS_ENCRYPTED_DATA_KEY_NAME = "tca_root_data_key.kms";
-  private static final String S3_AES_ENCRYPTED_PRIVATE_KEY_NAME = "tca_root_private_key.aes";
-  private static final String S3_CERT_NAME = "tca_root_certificate.pem";
-  private static final String S3_ATTESTATION_DOC_NAME = "attestation_doc.base64";
-  private static final String S3_TLOG_ENTRY_NAME = "tca_root_tlog_entry.json";
+  private static final String S3_KMS_ENCRYPTED_DATA_KEY_NAME = "private/0/root_data_key.kms";
+  private static final String S3_AES_ENCRYPTED_PRIVATE_KEY_NAME = "private/0/root_private_key.aes";
+  private static final String S3_CERT_NAME = "public/0/root_certificate.pem";
+  private static final String S3_ATTESTATION_DOC_NAME = "public/0/attestation_doc.base64";
+  private static final String S3_TLOG_ENTRY_NAME = "public/0/cert_tlog_entry.json";
 
-  private final String bucketName;
+  private final String publicBucketName;
+  private final String privateBucketName;
 
+  public KeyBackupBucketPropertiesFactory(String publicBucketName, String privateBucketName) {
+    this.publicBucketName = publicBucketName;
+    this.privateBucketName = privateBucketName;
+  }
+
+  /**
+   * @deprecated Use {@link #KeyBackupBucketPropertiesFactory(String, String)} instead. This
+   *     constructor is kept for backward compatibility and uses the same bucket for both public and
+   *     private data.
+   */
+  @Deprecated
   public KeyBackupBucketPropertiesFactory(String bucketName) {
-    this.bucketName = bucketName;
+    this(bucketName, bucketName);
   }
 
   public KeyBackupBucketProperties create() {
     return KeyBackupBucketProperties.builder()
-        .setBucketName(bucketName)
+        .setPublicBucketName(publicBucketName)
+        .setPrivateBucketName(privateBucketName)
         .setKmsEncryptedDataKeyPath(S3_KMS_ENCRYPTED_DATA_KEY_NAME)
         .setAesEncryptedPrivateKeyPath(S3_AES_ENCRYPTED_PRIVATE_KEY_NAME)
         .setCertPath(S3_CERT_NAME)

@@ -69,6 +69,7 @@ declare -a tools=(
   get-architecture
   coverage
   vendor
+  gitlinks
 )
 
 for tool in "${tools[@]}"; do
@@ -98,6 +99,7 @@ ln -s .devkit/devkit devkit
 devkit/bootstrap --templates-root .devkit --template docs
 if [[ -n "${KOKORO_ARTIFACTS_DIR:-}" ]]; then
   cp -r "${DOCS}"/templates "${KOKORO_ARTIFACTS_DIR}"/docs
+  cp -r "${DOCS}"/devkit_json.md "${KOKORO_ARTIFACTS_DIR}"/docs
 fi
 if [[ ${DEBUG} -ne 1 ]]; then
   rm -rf "${DOCS}"

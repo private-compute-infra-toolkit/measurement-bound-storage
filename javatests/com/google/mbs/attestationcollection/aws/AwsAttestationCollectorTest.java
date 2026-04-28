@@ -23,8 +23,8 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.io.Resources;
 import com.google.mbs.attestationcollection.AttestationToken;
-import com.google.mbs.attestationcollection.aws.jni.NitroSecurityModule;
-import com.google.mbs.attestationcollection.aws.jni.NitroSecurityModuleFactory;
+import com.google.platform.aws.nsm.NitroSecurityModule;
+import com.google.platform.aws.nsm.NitroSecurityModuleFactory;
 import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;

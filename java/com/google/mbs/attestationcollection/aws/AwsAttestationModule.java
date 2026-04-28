@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 
-package com.google.mbs.attestationcollection.aws.jni;
+package com.google.mbs.attestationcollection.aws;
 
-public class DefaultNitroSecurityModuleFactory implements NitroSecurityModuleFactory {
+import com.google.inject.AbstractModule;
+import com.google.mbs.attestationcollection.AttestationCollector;
+import com.google.platform.aws.nsm.AwsNsmModule;
+
+/** Guice module for AWS Attestation collection. */
+public class AwsAttestationModule extends AbstractModule {
   @Override
-  public NitroSecurityModule create() {
-    return new NitroSecurityModule();
+  protected void configure() {
+    install(new AwsNsmModule());
+    bind(AttestationCollector.class).to(AwsAttestationCollector.class);
   }
 }

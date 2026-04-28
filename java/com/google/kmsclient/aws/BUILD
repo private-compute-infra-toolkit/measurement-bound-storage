@@ -22,14 +22,18 @@ java_library(
     name = "aws",
     srcs = [
         "AwsKmsClient.java",
-        "KmsToolEnclaveWrapper.java",
-        "TcaAwsCredentialsProvider.java",
+        "AwsKmsClientModule.java",
     ],
     deps = [
         "//java/com/google/kmsclient",
-        "@maven//:com_google_guava_guava",
-        "@maven//:commons_io_commons_io",
+        "//java/com/google/platform/aws/nsm",
+        "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
         "@maven//:software_amazon_awssdk_auth",
+        "@maven//:software_amazon_awssdk_kms",
+        "@maven//:software_amazon_awssdk_regions",
+        "@maven//:software_amazon_awssdk_sdk_core",
     ],
 )

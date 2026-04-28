@@ -68,7 +68,7 @@ public class RekorClientImplTest {
     tlogClient = new RekorClientImpl(mockRekorClient);
 
     // Generate a test keypair and self-signed certificate
-    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", "BC");
+    KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
     kpg.initialize(2048);
     testKeyPair = kpg.generateKeyPair();
 

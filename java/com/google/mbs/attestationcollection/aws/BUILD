@@ -20,12 +20,12 @@ java_library(
     name = "aws",
     srcs = [
         "AwsAttestationCollector.java",
+        "AwsAttestationModule.java",
     ],
     deps = [
         "//java/com/google/mbs/attestationcollection",
-        "//java/com/google/mbs/attestationcollection/aws/jni:nsm",
-        "@maven//:com_google_flogger_flogger",
-        "@maven//:com_google_guava_guava",
+        "//java/com/google/platform/aws/nsm",
+        "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
     ],
 )

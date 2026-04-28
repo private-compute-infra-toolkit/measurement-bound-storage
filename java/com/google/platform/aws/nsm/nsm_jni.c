@@ -20,20 +20,20 @@
 static const int32_t SUCCESS = 0;
 static const int32_t JNI_OBJECT_ALLOCATION_ERROR = -2;
 
-JNIEXPORT jint JNICALL Java_com_google_mbs_attestationcollection_aws_jni_NitroSecurityModule_init(JNIEnv *env, jclass ignored)
+JNIEXPORT jint JNICALL Java_com_google_platform_aws_nsm_NitroSecurityModule_init(JNIEnv *env, jclass ignored)
 {
     return nsm_lib_init();
 }
 
-JNIEXPORT void JNICALL Java_com_google_mbs_attestationcollection_aws_jni_NitroSecurityModule_exit(JNIEnv *env, jclass ignored, jint fd)
+JNIEXPORT void JNICALL Java_com_google_platform_aws_nsm_NitroSecurityModule_exit(JNIEnv *env, jclass ignored, jint fd)
 {
     nsm_lib_exit(fd);
 }
 
-JNIEXPORT jobject JNICALL Java_com_google_mbs_attestationcollection_aws_jni_NitroSecurityModule_getAttestationDoc(
+JNIEXPORT jobject JNICALL Java_com_google_platform_aws_nsm_NitroSecurityModule_getAttestationDoc(
     JNIEnv *env, jclass ignored, jint fd, jbyteArray user_data_array, jbyteArray nonce_array, jbyteArray public_key_array)
 {
-    jclass nsm_result_class = (*env)->FindClass(env, "com/google/mbs/attestationcollection/aws/jni/NsmJniResult");
+    jclass nsm_result_class = (*env)->FindClass(env, "com/google/platform/aws/nsm/NsmJniResult");
     if (nsm_result_class == NULL)
     {
         return NULL; // Should throw an exception in Java

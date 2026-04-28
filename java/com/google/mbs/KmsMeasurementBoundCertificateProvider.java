@@ -16,6 +16,8 @@
 
 package com.google.mbs;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.flogger.FluentLogger;
 import com.google.common.io.ByteStreams;
 import com.google.crypto.tink.AccessesPartialKey;
@@ -39,23 +41,22 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.RSAPublicKeySpec;
 import java.util.Optional;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.ChecksumAlgorithm;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
@@ -70,6 +71,9 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
   private static final SecureRandom secureRandom = new SecureRandom();
 
   static {
+    if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+      Security.addProvider(new BouncyCastleProvider());
+    }
     try {
       AeadConfig.register();
     } catch (GeneralSecurityException e) {
@@ -84,6 +88,20 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
   private final TransparencyLogClient tlogClient;
   private final AttestationCollector attestationCollector;
   private final byte[] userDataBoundToAttestation;
+  private final MbsCertificateFactory certificateFactory;
+
+  private final Supplier<MeasurementBoundCertificate> cachedCertificate =
+      Suppliers.memoize(
+          () -> {
+            try {
+              return executeLoadOrGenerateCertificate();
+            } catch (IOException
+                | GeneralSecurityException
+                | InterruptedException
+                | KmsException e) {
+              throw new RuntimeException(e);
+            }
+          });
 
   @Inject
   public KmsMeasurementBoundCertificateProvider(
@@ -93,7 +111,8 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       String kmsKeyArn,
       byte[] userDataBoundToAttestation,
       TransparencyLogClient tlogClient,
-      AttestationCollector attestationCollector) {
+      AttestationCollector attestationCollector,
+      MbsCertificateFactory certificateFactory) {
     this.kmsClient = kmsClient;
     this.s3Client = s3Client;
     this.bucketProperties = bucketProperties;
@@ -101,14 +120,11 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     this.userDataBoundToAttestation = userDataBoundToAttestation;
     this.tlogClient = tlogClient;
     this.attestationCollector = attestationCollector;
+    this.certificateFactory = certificateFactory;
   }
 
   public MeasurementBoundCertificate loadOrGenerateCertificate() {
-    try {
-      return executeLoadOrGenerateCertificate();
-    } catch (IOException | GeneralSecurityException | InterruptedException | KmsException e) {
-      throw new RuntimeException(e);
-    }
+    return cachedCertificate.get();
   }
 
   /**
@@ -126,7 +142,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       ResponseInputStream<GetObjectResponse> s3CertObject =
           s3Client.getObject(
               GetObjectRequest.builder()
-                  .bucket(bucketProperties.getBucketName())
+                  .bucket(bucketProperties.getPublicBucketName())
                   .key(bucketProperties.getCertPath())
                   .build());
       byte[] certBytes = ByteStreams.toByteArray(s3CertObject);
@@ -138,7 +154,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       ResponseInputStream<GetObjectResponse> s3KmsKeyObject =
           s3Client.getObject(
               GetObjectRequest.builder()
-                  .bucket(bucketProperties.getBucketName())
+                  .bucket(bucketProperties.getPrivateBucketName())
                   .key(bucketProperties.getKmsEncryptedDataKeyPath())
                   .build());
       byte[] kmsEncryptedDataKey = ByteStreams.toByteArray(s3KmsKeyObject);
@@ -150,7 +166,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       ResponseInputStream<GetObjectResponse> s3AesKeyObject =
           s3Client.getObject(
               GetObjectRequest.builder()
-                  .bucket(bucketProperties.getBucketName())
+                  .bucket(bucketProperties.getPrivateBucketName())
                   .key(bucketProperties.getAesEncryptedPrivateKeyPath())
                   .build());
       byte[] aeadEncryptedPrivateKey = ByteStreams.toByteArray(s3AesKeyObject);
@@ -159,7 +175,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       ResponseInputStream<GetObjectResponse> s3AttestationDoc =
           s3Client.getObject(
               GetObjectRequest.builder()
-                  .bucket(bucketProperties.getBucketName())
+                  .bucket(bucketProperties.getPublicBucketName())
                   .key(bucketProperties.getAttestationDocPath())
                   .build());
       byte[] attestationDocBytes = ByteStreams.toByteArray(s3AttestationDoc);
@@ -167,12 +183,13 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
 
       // Decrypt the private key locally using the data key
       byte[] decryptedPrivateKey = decrypt(aeadEncryptedPrivateKey, dataKey);
-      KeyPair keyPair = createKeyPairFromPrivateKey(decryptedPrivateKey);
+      PrivateKey privateKey =
+          createPrivateKey(decryptedPrivateKey, certificate.getPublicKey().getAlgorithm());
 
       // Reconcile tlog artifacts if necessary
       reconcileTlogArtifacts(certificate);
 
-      return new MeasurementBoundCertificate(certificate, keyPair.getPrivate(), token);
+      return new MeasurementBoundCertificate(certificate, privateKey, token);
     } catch (NoSuchKeyException e) {
       // If the key or cert doesn't exist, generate a new one.
       return generateAndStoreCertificate();
@@ -185,14 +202,10 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
           InterruptedException,
           GeneralSecurityException,
           KmsException {
-    // Generate Key Pair
-    KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KEY_ALGORITHM);
-    keyPairGenerator.initialize(KEY_SIZE, secureRandom);
-    KeyPair keyPair = keyPairGenerator.generateKeyPair();
+    MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey = certificateFactory.generate();
 
-    // Generate Certificate
-    X509Certificate certificate =
-        CertificateGenerator.generateSelfSignedCertificate(keyPair).certificate;
+    X509Certificate certificate = certAndKey.certificate();
+    PrivateKey privateKey = certAndKey.privateKey();
 
     AttestationToken token =
         attestationCollector.collectBoundToPubkey(
@@ -202,45 +215,48 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     KmsGeneratedKey generatedKey = kmsClient.generateDataKey(kmsKeyArn);
 
     // Encrypt the private key locally with the plaintext data key
-    byte[] aeadEncryptedPrivateKey =
-        encrypt(keyPair.getPrivate().getEncoded(), generatedKey.plaintext());
+    byte[] aeadEncryptedPrivateKey = encrypt(privateKey.getEncoded(), generatedKey.plaintext());
 
     // Store the AES-encrypted private key in S3
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(bucketProperties.getBucketName())
+            .bucket(bucketProperties.getPrivateBucketName())
             .key(bucketProperties.getAesEncryptedPrivateKeyPath())
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
         RequestBody.fromBytes(aeadEncryptedPrivateKey));
 
     // Store the KMS-encrypted data key in S3
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(bucketProperties.getBucketName())
+            .bucket(bucketProperties.getPrivateBucketName())
             .key(bucketProperties.getKmsEncryptedDataKeyPath())
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
         RequestBody.fromBytes(generatedKey.ciphertext()));
 
     // Store the certificate in S3
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(bucketProperties.getBucketName())
+            .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getCertPath())
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
         RequestBody.fromBytes(certificate.getEncoded()));
 
     // Store the attestation doc in S3
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(bucketProperties.getBucketName())
+            .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getAttestationDocPath())
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
         RequestBody.fromBytes(token.getBytes()));
 
     // Record the certificate in the transparency log
     TlogEntry tlogEntry;
     try {
-      tlogEntry = tlogClient.recordCertificate(certificate, keyPair.getPrivate());
+      tlogEntry = tlogClient.recordCertificate(certificate, privateKey);
     } catch (Exception e) {
       // Per requirements, failure to register the root is a catastrophic failure.
       throw new RuntimeException(
@@ -250,29 +266,20 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     // Store the tlog artifacts in S3
     s3Client.putObject(
         PutObjectRequest.builder()
-            .bucket(bucketProperties.getBucketName())
+            .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getTlogEntryPath())
+            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
         RequestBody.fromString(tlogEntry.getEntryJson()));
 
-    return new MeasurementBoundCertificate(certificate, keyPair.getPrivate(), token);
+    return new MeasurementBoundCertificate(certificate, privateKey, token);
   }
 
-  private KeyPair createKeyPairFromPrivateKey(byte[] privateKeyBytes)
+  private PrivateKey createPrivateKey(byte[] privateKeyBytes, String algorithm)
       throws GeneralSecurityException {
-    KeyFactory keyFactory = KeyFactory.getInstance(KEY_ALGORITHM);
+    KeyFactory keyFactory = KeyFactory.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME);
     PKCS8EncodedKeySpec privateKeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
-    PrivateKey privateKey = keyFactory.generatePrivate(privateKeySpec);
-
-    if (privateKey instanceof RSAPrivateCrtKey) {
-      RSAPrivateCrtKey rsaPrivateCrtKey = (RSAPrivateCrtKey) privateKey;
-      RSAPublicKeySpec publicKeySpec =
-          new RSAPublicKeySpec(rsaPrivateCrtKey.getModulus(), rsaPrivateCrtKey.getPublicExponent());
-      PublicKey publicKey = keyFactory.generatePublic(publicKeySpec);
-      return new KeyPair(publicKey, privateKey);
-    } else {
-      throw new GeneralSecurityException("Private key is not an instance of RSAPrivateCrtKey");
-    }
+    return keyFactory.generatePrivate(privateKeySpec);
   }
 
   private byte[] encrypt(byte[] plaintext, byte[] key) throws GeneralSecurityException {
@@ -306,13 +313,9 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     return keysetHandle.getPrimitive(RegistryConfiguration.get(), Aead.class);
   }
 
-  private boolean s3ObjectExists(String key) {
+  private boolean s3ObjectExists(String bucketName, String key) {
     try {
-      s3Client.headObject(
-          software.amazon.awssdk.services.s3.model.HeadObjectRequest.builder()
-              .bucket(bucketProperties.getBucketName())
-              .key(key)
-              .build());
+      s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(key).build());
       return true;
     } catch (NoSuchKeyException e) {
       return false;
@@ -326,7 +329,8 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     // but before it could store the returned tlog entry JSON in the S3 bucket.
     // By checking for the existence of the entry in S3 and fetching it from Rekor
     // if it's missing, we ensure the system self-heals and maintains consistency.
-    if (!s3ObjectExists(bucketProperties.getTlogEntryPath())) {
+    if (!s3ObjectExists(
+        bucketProperties.getPublicBucketName(), bucketProperties.getTlogEntryPath())) {
       logger.atInfo().log("Tlog entry not found in S3, attempting to reconcile from Rekor.");
       // Tlog entry is missing, try to retrieve from Rekor
       try {
@@ -336,8 +340,9 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
           TlogEntry tlogEntry = tlogEntryOpt.get();
           s3Client.putObject(
               PutObjectRequest.builder()
-                  .bucket(bucketProperties.getBucketName())
+                  .bucket(bucketProperties.getPublicBucketName())
                   .key(bucketProperties.getTlogEntryPath())
+                  .checksumAlgorithm(ChecksumAlgorithm.SHA256)
                   .build(),
               RequestBody.fromString(tlogEntry.getEntryJson()));
           logger.atInfo().log("Successfully reconciled tlog entry from Rekor.");

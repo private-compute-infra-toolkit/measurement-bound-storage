@@ -24,18 +24,20 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class KeyBackupBucketPropertiesFactoryTest {
-  final String bucketName = "bucket1";
+  final String publicBucketName = "test_public";
+  final String privateBucketName = "test_private";
 
   @Test
   public void factory_creates_properties_with_defaults() {
     KeyBackupBucketProperties properties =
-        new KeyBackupBucketPropertiesFactory(bucketName).create();
+        new KeyBackupBucketPropertiesFactory(publicBucketName, privateBucketName).create();
 
-    assertEquals(bucketName, properties.getBucketName());
-    assertEquals("tca_root_data_key.kms", properties.getKmsEncryptedDataKeyPath());
-    assertEquals("tca_root_private_key.aes", properties.getAesEncryptedPrivateKeyPath());
-    assertEquals("tca_root_certificate.pem", properties.getCertPath());
-    assertEquals("attestation_doc.base64", properties.getAttestationDocPath());
-    assertEquals("tca_root_tlog_entry.json", properties.getTlogEntryPath());
+    assertEquals(publicBucketName, properties.getPublicBucketName());
+    assertEquals(privateBucketName, properties.getPrivateBucketName());
+    assertEquals("private/0/root_data_key.kms", properties.getKmsEncryptedDataKeyPath());
+    assertEquals("private/0/root_private_key.aes", properties.getAesEncryptedPrivateKeyPath());
+    assertEquals("public/0/root_certificate.pem", properties.getCertPath());
+    assertEquals("public/0/attestation_doc.base64", properties.getAttestationDocPath());
+    assertEquals("public/0/cert_tlog_entry.json", properties.getTlogEntryPath());
   }
 }

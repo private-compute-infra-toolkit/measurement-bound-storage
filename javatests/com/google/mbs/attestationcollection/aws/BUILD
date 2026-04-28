@@ -25,7 +25,7 @@ java_library(
     deps = [
         "//java/com/google/mbs/attestationcollection",
         "//java/com/google/mbs/attestationcollection/aws",
-        "//java/com/google/mbs/attestationcollection/aws/jni:nsm",
+        "//java/com/google/platform/aws/nsm",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_inject_guice",
         "@maven//:com_google_truth_truth",

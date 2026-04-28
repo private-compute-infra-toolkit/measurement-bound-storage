@@ -18,8 +18,8 @@ package com.google.mbs.attestationcollection.aws;
 
 import com.google.mbs.attestationcollection.AttestationCollector;
 import com.google.mbs.attestationcollection.AttestationToken;
-import com.google.mbs.attestationcollection.aws.jni.NitroSecurityModule;
-import com.google.mbs.attestationcollection.aws.jni.NitroSecurityModuleFactory;
+import com.google.platform.aws.nsm.NitroSecurityModule;
+import com.google.platform.aws.nsm.NitroSecurityModuleFactory;
 import jakarta.inject.Inject;
 import java.security.PublicKey;
 import java.util.Optional;

@@ -14,21 +14,22 @@
 
 load("@rules_java//java:defs.bzl", "java_library", "java_plugin")
 
+package(default_visibility = ["//visibility:public"])
+
 java_plugin(
     name = "auto_value_plugin",
     processor_class = "com.google.auto.value.processor.AutoValueProcessor",
     deps = ["@maven//:com_google_auto_value_auto_value"],
 )
 
-package(default_visibility = ["//visibility:public"])
-
 java_library(
     name = "certmanagement",
     srcs = [
-        "CertificateGenerator.java",
         "KeyBackupBucketProperties.java",
         "KeyBackupBucketPropertiesFactory.java",
+        "KeyPairs.java",
         "KmsMeasurementBoundCertificateProvider.java",
+        "MbsCertificateFactory.java",
         "MeasurementBoundCertificate.java",
         "MeasurementBoundCertificateProvider.java",
     ],
@@ -42,7 +43,6 @@ java_library(
         "//java/com/google/mbs/attestationcollection",
         "//java/com/google/tlog",
         "@maven//:com_google_auto_value_auto_value_annotations",
-        "@maven//:com_google_code_gson_gson",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_flogger_flogger",
         "@maven//:com_google_guava_guava",

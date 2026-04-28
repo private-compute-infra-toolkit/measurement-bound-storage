@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.google.mbs.attestationcollection.aws.jni;
+package com.google.platform.aws.nsm;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.mbs.attestationcollection.aws.jni.NitroSecurityModule.NitroSecurityModuleException;
+import com.google.platform.aws.nsm.NitroSecurityModule.NitroSecurityModuleException;
 import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;

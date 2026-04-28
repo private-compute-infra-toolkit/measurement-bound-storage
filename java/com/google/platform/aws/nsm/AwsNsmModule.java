@@ -14,8 +14,14 @@
  * limitations under the License.
  */
 
-package com.google.mbs.attestationcollection.aws.jni;
+package com.google.platform.aws.nsm;
 
-public interface NitroSecurityModuleFactory {
-  NitroSecurityModule create();
+import com.google.inject.AbstractModule;
+
+/** Guice module for AWS Nitro Security Module (NSM). */
+public class AwsNsmModule extends AbstractModule {
+  @Override
+  protected void configure() {
+    bind(NitroSecurityModuleFactory.class).to(DefaultNitroSecurityModuleFactory.class);
+  }
 }

@@ -25,7 +25,9 @@ public abstract class KeyBackupBucketProperties {
     return new AutoValue_KeyBackupBucketProperties.Builder();
   }
 
-  public abstract String getBucketName();
+  public abstract String getPublicBucketName();
+
+  public abstract String getPrivateBucketName();
 
   public abstract String getKmsEncryptedDataKeyPath();
 
@@ -39,7 +41,9 @@ public abstract class KeyBackupBucketProperties {
 
   @AutoValue.Builder
   public abstract static class Builder {
-    public abstract KeyBackupBucketProperties.Builder setBucketName(String value);
+    public abstract KeyBackupBucketProperties.Builder setPublicBucketName(String value);
+
+    public abstract KeyBackupBucketProperties.Builder setPrivateBucketName(String value);
 
     public abstract KeyBackupBucketProperties.Builder setKmsEncryptedDataKeyPath(String value);
 

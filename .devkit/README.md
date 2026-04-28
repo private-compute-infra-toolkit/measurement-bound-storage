@@ -18,9 +18,8 @@ faster, safer, and easier.
 
 -   Sudo-less [Docker](https://www.docker.com/)
 -   [Docker Buildx plugin](https://github.com/docker/buildx)
--   [Python 3](https://www.python.org/downloads/) installed on your Linux machine.
--   [Bazelisk](https://github.com/bazelbuild/bazelisk/releases) to be able to build code outside of
-    DevKit containers
+-   [Bazelisk](https://github.com/bazelbuild/bazelisk/releases) (optional, if you want to build code
+    outside of DevKit)
 
 ## Setup
 
@@ -39,7 +38,6 @@ faster, safer, and easier.
 
     ```sh
     ln -s .devkit/devkit devkit
-    echo ".devkit" >> .bazelignore
     ```
 
 1. Bootstrap the project.
@@ -66,3 +64,8 @@ faster, safer, and easier.
     devkit/dev
     devkit/vscode_ide --server # Spins up VS Code IDE in a local server at localhost:8080
     ```
+
+## Configuration
+
+The project configuration is stored in `devkit.json`. See [docs/devkit_json.md](docs/devkit_json.md)
+for details.

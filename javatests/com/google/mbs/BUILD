@@ -48,9 +48,9 @@ java_test(
 )
 
 java_test(
-    name = "CertificateGeneratorTest",
+    name = "MbsCertificateFactoryTest",
     size = "small",
-    srcs = ["CertificateGeneratorTest.java"],
+    srcs = ["MbsCertificateFactoryTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
         "@maven//:junit_junit",

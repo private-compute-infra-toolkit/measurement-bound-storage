@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,21 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_java//java:defs.bzl", "java_library", "java_test")
+set -o errexit
+set -o nounset
 
-java_library(
-    name = "tests",
-    srcs = ["NitroSecurityModuleTest.java"],
-    deps = [
-        "//java/com/google/mbs/attestationcollection/aws/jni:nsm",
-        "@maven//:com_google_truth_truth",
-        "@maven//:junit_junit",
-    ],
-)
+DEVKIT="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+readonly DEVKIT
 
-java_test(
-    name = "NitroSecurityModuleTest",
-    size = "small",
-    test_class = "com.google.mbs.attestationcollection.aws.jni.NitroSecurityModuleTest",
-    runtime_deps = [":tests"],
-)
+readonly SCRIPTS="${DEVKIT}/../scripts"
+source "${SCRIPTS}/lib_logging.sh"
+
+"${SCRIPTS}/build_and_run" build-env aws "$@"

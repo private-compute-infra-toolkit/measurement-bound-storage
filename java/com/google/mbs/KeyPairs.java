@@ -1,0 +1,56 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.google.mbs;
+
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.cert.CertificateException;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+/** Utilities for generating key pairs. */
+public final class KeyPairs {
+
+  private static final SecureRandom secureRandom = new SecureRandom();
+
+  static {
+    if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+      Security.addProvider(new BouncyCastleProvider());
+    }
+  }
+
+  private KeyPairs() {}
+
+  /** Generates a default RSA 4096 key pair. */
+  public static KeyPair generateKeyPair() throws CertificateException {
+    return generateKeyPair(4096, "RSA");
+  }
+
+  /** Generates a key pair with specified size and algorithm. */
+  public static KeyPair generateKeyPair(int keySize, String algorithm) throws CertificateException {
+    try {
+      KeyPairGenerator keyPairGenerator =
+          KeyPairGenerator.getInstance(algorithm, BouncyCastleProvider.PROVIDER_NAME);
+      keyPairGenerator.initialize(keySize, secureRandom);
+      return keyPairGenerator.generateKeyPair();
+    } catch (GeneralSecurityException e) {
+      throw new CertificateException(e);
+    }
+  }
+}

@@ -6,7 +6,6 @@ bazel_dep(name = "rules_jvm_external", version = "6.7")
 bazel_dep(name = "rules_java", version = "8.12.0")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "rules_pkg", version = "1.1.0")
-bazel_dep(name = "rules_distroless", version = "0.5.1")
 bazel_dep(name = "rules_cc", version = "0.0.9")
 bazel_dep(name = "rules_rust", version = "0.65.0")
 bazel_dep(name = "toolchains_llvm", version = "1.4.0")
@@ -26,14 +25,6 @@ register_toolchains(
     "@cpp_toolchain//:all",
     dev_dependency = True,
 )
-
-apt = use_extension("@rules_distroless//apt:extensions.bzl", "apt")
-apt.install(
-    name = "sysroot",
-    lock = "//toolchains/sysroot:sysroot.lock.json",
-    manifest = "//toolchains/sysroot:sysroot.yaml",
-)
-use_repo(apt, "sysroot")
 
 http_archive(
     name = "confidential-federated-compute",
@@ -57,7 +48,7 @@ llvm.sysroot(
 
 http_archive(
     name = "aws-nitro-enclaves-nsm-api_src",
-    build_file = "//java/com/google/mbs/attestationcollection/aws/jni:libnsm_static.BUILD",
+    build_file = "//java/com/google/platform/aws/nsm:libnsm_static.BUILD",
     sha256 = "b31783dba1a8e52f2232f79362886fe18e50d077f2e15f487779ed8677ffe905",
     strip_prefix = "aws-nitro-enclaves-nsm-api-0.4.0",
     urls = ["https://github.com/aws/aws-nitro-enclaves-nsm-api/archive/refs/tags/v0.4.0.tar.gz"],
@@ -81,6 +72,9 @@ maven.install(
         "org.bouncycastle:bcpkix-jdk18on:" + BOUNCY_CASTLE_VERSION,
         "software.amazon.awssdk:s3:" + AWS_SDK_VERSION,
         "software.amazon.awssdk:auth:" + AWS_SDK_VERSION,
+        "software.amazon.awssdk:kms:" + AWS_SDK_VERSION,
+        "software.amazon.awssdk:regions:" + AWS_SDK_VERSION,
+        "software.amazon.awssdk:sdk-core:" + AWS_SDK_VERSION,
         "dev.sigstore:sigstore-java:2.0.0-rc1",
         "jakarta.inject:jakarta.inject-api:2.0.1",
         "commons-io:commons-io:2.18.0",

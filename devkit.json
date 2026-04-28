@@ -3,7 +3,8 @@
     "registry": {
       "host": "",
       "project": "",
-      "repository": ""
+      "repository": "",
+      "namespace": "private-compute-infra-toolkit/measurement-bound-storage"
     },
     "images": {
       "build-env": {

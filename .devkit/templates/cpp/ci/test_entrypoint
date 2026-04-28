@@ -17,7 +17,7 @@ set -o errexit
 set -o nounset
 
 # To check images customization from devkit.json
-tree
+terraform --version
 
 bazel build //...
 

@@ -21,12 +21,14 @@ package(default_visibility = ["//visibility:public"])
 java_library(
     name = "nsm",
     srcs = [
+        "AwsNsmModule.java",
         "DefaultNitroSecurityModuleFactory.java",
         "NitroSecurityModule.java",
         "NitroSecurityModuleFactory.java",
         "NsmJniResult.java",
     ],
     runtime_deps = [":nsm_jni"],
+    deps = ["@maven//:com_google_inject_guice"],
 )
 
 cc_binary(
