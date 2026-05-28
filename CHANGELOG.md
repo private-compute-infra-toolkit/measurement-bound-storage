@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.3.0 (2026-05-28)
+
+
+### Dependencies
+
+* **deps:** Update DevKit to release-3.6.0
+* **deps:** Update DevKit to release-3.7.0
+
+
+### Features
+
+* Add internal script for fetching root certs
+
+
+### Bug Fixes
+
+* Store the root cert in PEM format to match the file extension
+* update artifacts glob collected by kokoro fetch_root_certs
+* Update path to build_file in kokoro fetch_root_certs.cfg
+
 ## 0.2.0 (2026-04-28)
 
 

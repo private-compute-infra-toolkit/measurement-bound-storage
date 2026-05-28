@@ -119,8 +119,13 @@ public class KmsMeasurementBoundCertificateProviderTest {
             certificateFactory);
   }
 
-  @Test
-  public void loadOrGenerateCertificate_loadsFromS3() throws Exception {
+  @FunctionalInterface
+  private interface CertificateEncoder {
+    byte[] encode(X509Certificate certificate) throws Exception;
+  }
+
+  private void runLoadOrGenerateCertificate_loadsFromS3Test(CertificateEncoder encoder)
+      throws Exception {
     MbsCertificateFactory.CertSignatureSpec spec =
         new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey =
@@ -142,7 +147,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     ResponseInputStream<GetObjectResponse> certStream =
         new ResponseInputStream<>(
             GetObjectResponse.builder().build(),
-            new ByteArrayInputStream(certificate.getEncoded()));
+            new ByteArrayInputStream(encoder.encode(certificate)));
     when(s3Client.getObject(
             GetObjectRequest.builder()
                 .bucket(PUBLIC_BUCKET_NAME)
@@ -196,6 +201,17 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertEquals(
         Base64.getEncoder().encodeToString(attestationDocBytes),
         result.getAttestationToken().getBase64());
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_loadsFromS3Der() throws Exception {
+    runLoadOrGenerateCertificate_loadsFromS3Test(X509Certificate::getEncoded);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_loadsFromS3Pem() throws Exception {
+    runLoadOrGenerateCertificate_loadsFromS3Test(
+        KmsMeasurementBoundCertificateProvider::convertToPem);
   }
 
   @Test
@@ -274,7 +290,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
         tlogEntryFound = true;
       } else if (key.equals(bucketProperties.getCertPath())) {
         assertEquals(PUBLIC_BUCKET_NAME, putRequestCaptor.getAllValues().get(i).bucket());
-        assertArrayEquals(result.getCertificate().getEncoded(), content);
+        assertArrayEquals(
+            KmsMeasurementBoundCertificateProvider.convertToPem(result.getCertificate()), content);
         certFound = true;
       } else if (key.equals(bucketProperties.getAttestationDocPath())) {
         assertEquals(PUBLIC_BUCKET_NAME, putRequestCaptor.getAllValues().get(i).bucket());

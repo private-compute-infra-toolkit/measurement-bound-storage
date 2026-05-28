@@ -39,6 +39,8 @@ import com.google.tlog.TransparencyLogClient;
 import jakarta.inject.Inject;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
@@ -50,6 +52,8 @@ import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Optional;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemWriter;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -242,7 +246,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .key(bucketProperties.getCertPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
             .build(),
-        RequestBody.fromBytes(certificate.getEncoded()));
+        RequestBody.fromBytes(convertToPem(certificate)));
 
     // Store the attestation doc in S3
     s3Client.putObject(
@@ -355,5 +359,14 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
         logger.atSevere().withCause(e).log("Error during tlog reconciliation.");
       }
     }
+  }
+
+  static byte[] convertToPem(X509Certificate certificate)
+      throws IOException, GeneralSecurityException {
+    StringWriter stringWriter = new StringWriter();
+    try (PemWriter pemWriter = new PemWriter(stringWriter)) {
+      pemWriter.writeObject(new PemObject("CERTIFICATE", certificate.getEncoded()));
+    }
+    return stringWriter.toString().getBytes(StandardCharsets.UTF_8);
   }
 }
