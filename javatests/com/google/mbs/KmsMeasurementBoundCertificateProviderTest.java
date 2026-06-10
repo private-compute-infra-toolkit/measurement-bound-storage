@@ -272,6 +272,9 @@ public class KmsMeasurementBoundCertificateProviderTest {
     boolean certFound = false;
     boolean attestationDocFound = false;
     for (int i = 0; i < putRequestCaptor.getAllValues().size(); i++) {
+      assertEquals(
+          bucketProperties.getCacheControl(),
+          putRequestCaptor.getAllValues().get(i).cacheControl());
       String key = putRequestCaptor.getAllValues().get(i).key();
       byte[] content =
           requestBodyCaptor
@@ -402,6 +405,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
 
     assertEquals(PUBLIC_BUCKET_NAME, putRequestCaptor.getValue().bucket());
     assertEquals(bucketProperties.getTlogEntryPath(), putRequestCaptor.getValue().key());
+    assertEquals(bucketProperties.getCacheControl(), putRequestCaptor.getValue().cacheControl());
     assertArrayEquals(
         reconciledTlogJson.getBytes(StandardCharsets.UTF_8),
         requestBodyCaptor.getValue().contentStreamProvider().newStream().readAllBytes());

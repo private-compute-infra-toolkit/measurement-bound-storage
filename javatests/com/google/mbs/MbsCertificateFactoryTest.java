@@ -18,6 +18,7 @@ package com.google.mbs;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -31,6 +32,8 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
+import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -75,6 +78,14 @@ public class MbsCertificateFactoryTest {
     assertEquals(-1, cert.getBasicConstraints());
     assertEquals(
         new KeyUsage(expectedKeyUsageMask).toString(), getKeyUsageFromCert(cert).toString());
+    byte[] leafSkiBytes = cert.getExtensionValue(Extension.subjectKeyIdentifier.getId());
+    assertNotNull(leafSkiBytes);
+    SubjectKeyIdentifier actualLeafSki =
+        SubjectKeyIdentifier.getInstance(ASN1OctetString.getInstance(leafSkiBytes).getOctets());
+    SubjectKeyIdentifier expectedLeafSki =
+        new JcaX509ExtensionUtils().createSubjectKeyIdentifier(cert.getPublicKey());
+    assertEquals(expectedLeafSki, actualLeafSki);
+    assertNull(cert.getExtensionValue(Extension.authorityKeyIdentifier.getId()));
   }
 
   @Test
@@ -96,6 +107,14 @@ public class MbsCertificateFactoryTest {
 
     assertEquals(
         new KeyUsage(expectedKeyUsageMask).toString(), getKeyUsageFromCert(cert).toString());
+    byte[] rootSkiBytes = cert.getExtensionValue(Extension.subjectKeyIdentifier.getId());
+    assertNotNull(rootSkiBytes);
+    SubjectKeyIdentifier actualRootSki =
+        SubjectKeyIdentifier.getInstance(ASN1OctetString.getInstance(rootSkiBytes).getOctets());
+    SubjectKeyIdentifier expectedRootSki =
+        new JcaX509ExtensionUtils().createSubjectKeyIdentifier(cert.getPublicKey());
+    assertEquals(expectedRootSki, actualRootSki);
+    assertNull(cert.getExtensionValue(Extension.authorityKeyIdentifier.getId()));
   }
 
   @Test

@@ -39,5 +39,6 @@ public class KeyBackupBucketPropertiesFactoryTest {
     assertEquals("public/0/root_certificate.pem", properties.getCertPath());
     assertEquals("public/0/attestation_doc.base64", properties.getAttestationDocPath());
     assertEquals("public/0/cert_tlog_entry.json", properties.getTlogEntryPath());
+    assertEquals("public, max-age=120", properties.getCacheControl());
   }
 }

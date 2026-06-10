@@ -227,6 +227,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .bucket(bucketProperties.getPrivateBucketName())
             .key(bucketProperties.getAesEncryptedPrivateKeyPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .cacheControl(bucketProperties.getCacheControl())
             .build(),
         RequestBody.fromBytes(aeadEncryptedPrivateKey));
 
@@ -236,6 +237,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .bucket(bucketProperties.getPrivateBucketName())
             .key(bucketProperties.getKmsEncryptedDataKeyPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .cacheControl(bucketProperties.getCacheControl())
             .build(),
         RequestBody.fromBytes(generatedKey.ciphertext()));
 
@@ -245,6 +247,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getCertPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .cacheControl(bucketProperties.getCacheControl())
             .build(),
         RequestBody.fromBytes(convertToPem(certificate)));
 
@@ -254,6 +257,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getAttestationDocPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .cacheControl(bucketProperties.getCacheControl())
             .build(),
         RequestBody.fromBytes(token.getBytes()));
 
@@ -273,6 +277,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             .bucket(bucketProperties.getPublicBucketName())
             .key(bucketProperties.getTlogEntryPath())
             .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+            .cacheControl(bucketProperties.getCacheControl())
             .build(),
         RequestBody.fromString(tlogEntry.getEntryJson()));
 
@@ -347,6 +352,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
                   .bucket(bucketProperties.getPublicBucketName())
                   .key(bucketProperties.getTlogEntryPath())
                   .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+                  .cacheControl(bucketProperties.getCacheControl())
                   .build(),
               RequestBody.fromString(tlogEntry.getEntryJson()));
           logger.atInfo().log("Successfully reconciled tlog entry from Rekor.");
