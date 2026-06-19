@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.5.0 (2026-06-19)
+
+
+### Dependencies
+
+* **deps:** Update DevKit to release-3.9.0
+
+
+### Features
+
+* Add Metrics and dedicated port
+
+
+### Bug Fixes
+
+* convert kokoro continuous config files to symbolic links
+
 ## 0.4.0 (2026-06-10)
 
 

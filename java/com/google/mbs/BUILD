@@ -32,6 +32,8 @@ java_library(
         "MbsCertificateFactory.java",
         "MeasurementBoundCertificate.java",
         "MeasurementBoundCertificateProvider.java",
+        "Metrics.java",
+        "NoOpMetrics.java",
     ],
     plugins = [":auto_value_plugin"],
     runtime_deps = [

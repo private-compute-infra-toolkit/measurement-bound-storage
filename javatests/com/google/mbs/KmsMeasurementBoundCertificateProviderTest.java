@@ -37,6 +37,7 @@ import com.google.crypto.tink.aead.AesGcmKey;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
 import com.google.crypto.tink.util.SecretBytes;
 import com.google.kmsclient.KmsClientInterface;
+import com.google.kmsclient.KmsException;
 import com.google.kmsclient.KmsGeneratedKey;
 import com.google.mbs.attestationcollection.AttestationCollector;
 import com.google.mbs.attestationcollection.AttestationToken;
@@ -75,6 +76,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @RunWith(JUnit4.class)
 public class KmsMeasurementBoundCertificateProviderTest {
@@ -83,6 +85,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
   @Mock private S3Client s3Client;
   @Mock private TransparencyLogClient tlogClient;
   @Mock private AttestationCollector attestationCollector;
+  @Mock private Metrics mockMetrics;
 
   private MeasurementBoundCertificateProvider certificateProvider;
   private static final String PRIVATE_BUCKET_NAME = "test-private-bucket";
@@ -116,7 +119,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
             TEST_USER_DATA,
             tlogClient,
             attestationCollector,
-            certificateFactory);
+            certificateFactory,
+            mockMetrics);
   }
 
   @FunctionalInterface
@@ -201,6 +205,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertEquals(
         Base64.getEncoder().encodeToString(attestationDocBytes),
         result.getAttestationToken().getBase64());
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
 
   @Test
@@ -306,6 +311,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     if (!tlogEntryFound) fail("Could not find PutObjectRequest for Tlog entry");
     if (!certFound) fail("Could not find PutObjectRequest for cert");
     if (!attestationDocFound) fail("Could not find PutObjectRequest for attestationDoc");
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
 
   @Test
@@ -410,6 +416,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
         reconciledTlogJson.getBytes(StandardCharsets.UTF_8),
         requestBodyCaptor.getValue().contentStreamProvider().newStream().readAllBytes());
     verify(tlogClient).getTlogEntryByCertificate(certificate);
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
 
   @Test
@@ -459,7 +466,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
             TEST_USER_DATA,
             tlogClient,
             attestationCollector,
-            customBuilder);
+            customBuilder,
+            mockMetrics);
 
     // Mock S3 GetObject to throw NoSuchKeyException (to trigger generation)
     when(s3Client.getObject(any(GetObjectRequest.class)))
@@ -495,6 +503,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertEquals(notAfter, result.getCertificate().getNotAfter());
     assertArrayEquals(keyUsage, result.getCertificate().getKeyUsage());
     assertEquals(expectedPathLen, result.getCertificate().getBasicConstraints());
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
 
   @Test
@@ -514,7 +523,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
             TEST_USER_DATA,
             tlogClient,
             attestationCollector,
-            throwingBuilder);
+            throwingBuilder,
+            mockMetrics);
 
     // Mock S3 GetObject to throw NoSuchKeyException (to trigger generation)
     when(s3Client.getObject(any(GetObjectRequest.class)))
@@ -535,6 +545,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
         () -> {
           customProvider.loadOrGenerateCertificate();
         });
+    org.mockito.Mockito.verifyNoInteractions(mockMetrics);
   }
 
   @Test
@@ -570,7 +581,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
             TEST_USER_DATA,
             tlogClient,
             attestationCollector,
-            invalidBuilder);
+            invalidBuilder,
+            mockMetrics);
 
     // Mock collectBoundToPubkey to throw IllegalArgumentException for non-RSA keys
     when(attestationCollector.collectBoundToPubkey(any(), any()))
@@ -594,6 +606,130 @@ public class KmsMeasurementBoundCertificateProviderTest {
         () -> {
           customProvider.loadOrGenerateCertificate();
         });
+    org.mockito.Mockito.verifyNoInteractions(mockMetrics);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_s3FetchFails_reportsS3FetchFailed() throws Exception {
+    // Mock S3 GetObject to throw S3Exception (not NoSuchKeyException)
+    when(s3Client.getObject(any(GetObjectRequest.class)))
+        .thenThrow(S3Exception.builder().message("S3 error").build());
+
+    assertThrows(
+        RuntimeException.class,
+        () -> {
+          certificateProvider.loadOrGenerateCertificate();
+        });
+
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.S3_FETCH_FAILED);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_kmsDecryptFails_reportsKmsOperationFailed()
+      throws Exception {
+    // Setup S3 to return cert and encrypted keys (so we get to KMS decrypt)
+    MbsCertificateFactory.CertSignatureSpec spec =
+        new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
+    MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey =
+        MbsCertificateFactory.createSelfSignedCertificatesFactory(
+                spec,
+                new X500Name("CN=Test CA"),
+                Duration.ofDays(30),
+                Optional.empty(),
+                KeyUsage.keyCertSign)
+            .generate();
+    X509Certificate certificate = certAndKey.certificate();
+    PrivateKey privateKey = certAndKey.privateKey();
+
+    byte[] plaintextDataKey = generateAesKey();
+    byte[] kmsEncryptedDataKey = "kms-encrypted-data-key".getBytes(StandardCharsets.UTF_8);
+    byte[] aesEncryptedPrivateKey = encrypt(privateKey.getEncoded(), plaintextDataKey);
+
+    ResponseInputStream<GetObjectResponse> certStream =
+        new ResponseInputStream<>(
+            GetObjectResponse.builder().build(),
+            new ByteArrayInputStream(certificate.getEncoded()));
+    when(s3Client.getObject(
+            GetObjectRequest.builder()
+                .bucket(PUBLIC_BUCKET_NAME)
+                .key(bucketProperties.getCertPath())
+                .build()))
+        .thenReturn(certStream);
+
+    ResponseInputStream<GetObjectResponse> kmsKeyStream =
+        new ResponseInputStream<>(
+            GetObjectResponse.builder().build(), new ByteArrayInputStream(kmsEncryptedDataKey));
+    when(s3Client.getObject(
+            GetObjectRequest.builder()
+                .bucket(PRIVATE_BUCKET_NAME)
+                .key(bucketProperties.getKmsEncryptedDataKeyPath())
+                .build()))
+        .thenReturn(kmsKeyStream);
+
+    // Mock KMS decrypt to throw KmsException
+    when(kmsClient.decrypt(kmsEncryptedDataKey, KMS_KEY_ARN))
+        .thenThrow(new KmsException("KMS error"));
+
+    assertThrows(
+        RuntimeException.class,
+        () -> {
+          certificateProvider.loadOrGenerateCertificate();
+        });
+
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_kmsGenerateKeyFails_reportsKmsOperationFailed()
+      throws Exception {
+    // Mock S3 GetObject to throw NoSuchKeyException (to trigger generation)
+    when(s3Client.getObject(any(GetObjectRequest.class)))
+        .thenThrow(NoSuchKeyException.builder().build());
+
+    // Mock KMS generateDataKey to throw KmsException
+    when(kmsClient.generateDataKey(KMS_KEY_ARN)).thenThrow(new KmsException("KMS error"));
+
+    assertThrows(
+        RuntimeException.class,
+        () -> {
+          certificateProvider.loadOrGenerateCertificate();
+        });
+
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_s3WriteFails_reportsS3WriteFailed() throws Exception {
+    // Mock S3 GetObject to throw NoSuchKeyException (to trigger generation)
+    when(s3Client.getObject(any(GetObjectRequest.class)))
+        .thenThrow(NoSuchKeyException.builder().build());
+
+    // Mock KMS generateDataKey to succeed
+    byte[] dataKeyPlaintext = generateAesKey();
+    byte[] dataKeyCiphertext = "test-ciphertext-key".getBytes(StandardCharsets.UTF_8);
+    KmsGeneratedKey kmsGeneratedKey =
+        KmsGeneratedKey.builder()
+            .setPlaintext(dataKeyPlaintext)
+            .setCiphertext(dataKeyCiphertext)
+            .build();
+    when(kmsClient.generateDataKey(KMS_KEY_ARN)).thenReturn(kmsGeneratedKey);
+
+    // Mock AttestationCollector call
+    byte[] attestationDoc = "Mocked attestation doc".getBytes(StandardCharsets.UTF_8);
+    AttestationToken token = AttestationToken.fromBytes(attestationDoc);
+    when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
+
+    // Mock S3 putObject to throw S3Exception
+    when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+        .thenThrow(S3Exception.builder().message("S3 write error").build());
+
+    assertThrows(
+        RuntimeException.class,
+        () -> {
+          certificateProvider.loadOrGenerateCertificate();
+        });
+
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.S3_WRITE_FAILED);
   }
 
   private KeyPair generateKeyPair() throws GeneralSecurityException {

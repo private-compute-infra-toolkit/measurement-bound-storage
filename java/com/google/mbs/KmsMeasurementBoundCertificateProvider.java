@@ -55,6 +55,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.ChecksumAlgorithm;
@@ -93,6 +94,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
   private final AttestationCollector attestationCollector;
   private final byte[] userDataBoundToAttestation;
   private final MbsCertificateFactory certificateFactory;
+  private final Metrics metrics;
 
   private final Supplier<MeasurementBoundCertificate> cachedCertificate =
       Suppliers.memoize(
@@ -116,7 +118,8 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       byte[] userDataBoundToAttestation,
       TransparencyLogClient tlogClient,
       AttestationCollector attestationCollector,
-      MbsCertificateFactory certificateFactory) {
+      MbsCertificateFactory certificateFactory,
+      Metrics metrics) {
     this.kmsClient = kmsClient;
     this.s3Client = s3Client;
     this.bucketProperties = bucketProperties;
@@ -125,6 +128,7 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     this.tlogClient = tlogClient;
     this.attestationCollector = attestationCollector;
     this.certificateFactory = certificateFactory;
+    this.metrics = metrics;
   }
 
   public MeasurementBoundCertificate loadOrGenerateCertificate() {
@@ -193,10 +197,17 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
       // Reconcile tlog artifacts if necessary
       reconcileTlogArtifacts(certificate);
 
+      metrics.recordEvent(Metrics.MbsEvent.SUCCESS);
       return new MeasurementBoundCertificate(certificate, privateKey, token);
     } catch (NoSuchKeyException e) {
       // If the key or cert doesn't exist, generate a new one.
       return generateAndStoreCertificate();
+    } catch (KmsException e) {
+      metrics.recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
+      throw e;
+    } catch (SdkException e) {
+      metrics.recordEvent(Metrics.MbsEvent.S3_FETCH_FAILED);
+      throw e;
     }
   }
 
@@ -216,50 +227,61 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
             certificate.getPublicKey(), userDataBoundToAttestation);
 
     // Generate a data key from KMS
-    KmsGeneratedKey generatedKey = kmsClient.generateDataKey(kmsKeyArn);
+    KmsGeneratedKey generatedKey;
+    try {
+      generatedKey = kmsClient.generateDataKey(kmsKeyArn);
+    } catch (KmsException e) {
+      metrics.recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
+      throw e;
+    }
 
     // Encrypt the private key locally with the plaintext data key
     byte[] aeadEncryptedPrivateKey = encrypt(privateKey.getEncoded(), generatedKey.plaintext());
 
-    // Store the AES-encrypted private key in S3
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucketProperties.getPrivateBucketName())
-            .key(bucketProperties.getAesEncryptedPrivateKeyPath())
-            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-            .cacheControl(bucketProperties.getCacheControl())
-            .build(),
-        RequestBody.fromBytes(aeadEncryptedPrivateKey));
+    try {
+      // Store the AES-encrypted private key in S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketProperties.getPrivateBucketName())
+              .key(bucketProperties.getAesEncryptedPrivateKeyPath())
+              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+              .cacheControl(bucketProperties.getCacheControl())
+              .build(),
+          RequestBody.fromBytes(aeadEncryptedPrivateKey));
 
-    // Store the KMS-encrypted data key in S3
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucketProperties.getPrivateBucketName())
-            .key(bucketProperties.getKmsEncryptedDataKeyPath())
-            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-            .cacheControl(bucketProperties.getCacheControl())
-            .build(),
-        RequestBody.fromBytes(generatedKey.ciphertext()));
+      // Store the KMS-encrypted data key in S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketProperties.getPrivateBucketName())
+              .key(bucketProperties.getKmsEncryptedDataKeyPath())
+              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+              .cacheControl(bucketProperties.getCacheControl())
+              .build(),
+          RequestBody.fromBytes(generatedKey.ciphertext()));
 
-    // Store the certificate in S3
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucketProperties.getPublicBucketName())
-            .key(bucketProperties.getCertPath())
-            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-            .cacheControl(bucketProperties.getCacheControl())
-            .build(),
-        RequestBody.fromBytes(convertToPem(certificate)));
+      // Store the certificate in S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketProperties.getPublicBucketName())
+              .key(bucketProperties.getCertPath())
+              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+              .cacheControl(bucketProperties.getCacheControl())
+              .build(),
+          RequestBody.fromBytes(convertToPem(certificate)));
 
-    // Store the attestation doc in S3
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucketProperties.getPublicBucketName())
-            .key(bucketProperties.getAttestationDocPath())
-            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-            .cacheControl(bucketProperties.getCacheControl())
-            .build(),
-        RequestBody.fromBytes(token.getBytes()));
+      // Store the attestation doc in S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketProperties.getPublicBucketName())
+              .key(bucketProperties.getAttestationDocPath())
+              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+              .cacheControl(bucketProperties.getCacheControl())
+              .build(),
+          RequestBody.fromBytes(token.getBytes()));
+    } catch (SdkException e) {
+      metrics.recordEvent(Metrics.MbsEvent.S3_WRITE_FAILED);
+      throw e;
+    }
 
     // Record the certificate in the transparency log
     TlogEntry tlogEntry;
@@ -271,16 +293,22 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
           "Failed to record root certificate in transparency log: " + e.getMessage(), e);
     }
 
-    // Store the tlog artifacts in S3
-    s3Client.putObject(
-        PutObjectRequest.builder()
-            .bucket(bucketProperties.getPublicBucketName())
-            .key(bucketProperties.getTlogEntryPath())
-            .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-            .cacheControl(bucketProperties.getCacheControl())
-            .build(),
-        RequestBody.fromString(tlogEntry.getEntryJson()));
+    try {
+      // Store the tlog artifacts in S3
+      s3Client.putObject(
+          PutObjectRequest.builder()
+              .bucket(bucketProperties.getPublicBucketName())
+              .key(bucketProperties.getTlogEntryPath())
+              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
+              .cacheControl(bucketProperties.getCacheControl())
+              .build(),
+          RequestBody.fromString(tlogEntry.getEntryJson()));
+    } catch (SdkException e) {
+      metrics.recordEvent(Metrics.MbsEvent.S3_WRITE_FAILED);
+      throw e;
+    }
 
+    metrics.recordEvent(Metrics.MbsEvent.SUCCESS);
     return new MeasurementBoundCertificate(certificate, privateKey, token);
   }
 
