@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.6.0 (2026-08-31)
+
+
+### Dependencies
+
+* **deps:** Update DevKit to release-3.10.0
+* **deps:** Update DevKit to release-3.11.0
+
+
+### Features
+
+* Encapsulate KeyBackupBucketProperties in MbsModule
+* Introduce MbsModule and DummyMbsModule Guice modules
+
+
+### Bug Fixes
+
+* Prevent S3 stream leak in loadCertificateFromS3
+
 ## 0.5.0 (2026-06-19)
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package com.google.tlog;
+package com.google.mbs;
 
-/** Data class to hold the transparency log entry details as a JSON string. */
-public class TlogEntry {
-  private final String entryJson; // Raw JSON from the TLog
+/** Exception thrown when a requested MBS key backup artifact is not found in storage. */
+public class KeyBackupNotFoundException extends Exception {
 
-  public TlogEntry(String entryJson) {
-    this.entryJson = entryJson;
+  public KeyBackupNotFoundException(String message) {
+    super(message);
   }
 
-  public String getEntryJson() {
-    return entryJson;
+  public KeyBackupNotFoundException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

@@ -41,12 +41,13 @@ public class DummyMeasurementBoundCertificateProvider
   private MeasurementBoundCertificate mbc = null;
 
   @Override
-  public MeasurementBoundCertificate loadOrGenerateCertificate() {
+  public synchronized MeasurementBoundCertificate loadOrGenerateCertificate() {
     if (mbc != null) {
       return mbc;
     }
     try {
-      return generateNewCertificate();
+      mbc = generateNewCertificate();
+      return mbc;
     } catch (Exception e) {
       throw new RuntimeException("Failed to generate certificate", e);
     }

@@ -24,7 +24,6 @@ java_test(
         "//java/com/google/kmsclient",
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/attestationcollection",
-        "//java/com/google/tlog",
         "@maven//:com_google_code_gson_gson",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_guava_guava",
@@ -32,9 +31,6 @@ java_test(
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
         "@maven//:org_mockito_mockito_core",
-        "@maven//:software_amazon_awssdk_auth",
-        "@maven//:software_amazon_awssdk_s3",
-        "@maven//:software_amazon_awssdk_sdk_core",
     ],
 )
 
@@ -56,5 +52,53 @@ java_test(
         "@maven//:junit_junit",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
+    ],
+)
+
+java_test(
+    name = "MbsModuleTest",
+    size = "small",
+    srcs = ["MbsModuleTest.java"],
+    deps = [
+        "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs:dummy_cert_provider",
+        "//java/com/google/mbs:module",
+        "//java/com/google/mbs/adapters",
+        "@maven//:com_google_inject_guice",
+        "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+        "@maven//:software_amazon_awssdk_s3",
+    ],
+)
+
+java_test(
+    name = "MbsIntegrationTest",
+    size = "medium",
+    srcs = ["MbsIntegrationTest.java"],
+    tags = [
+        "exclusive",
+        "requires-docker",
+        "requires-network",
+    ],
+    deps = [
+        "//java/com/google/kmsclient",
+        "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs:module",
+        "//java/com/google/mbs/attestationcollection",
+        "//javatests/com/google/mbs/testing",
+        "@maven//:com_google_inject_extensions_guice_testlib",
+        "@maven//:com_google_inject_guice",
+        "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+        "@maven//:org_testcontainers_localstack",
+        "@maven//:org_testcontainers_testcontainers",
+        "@maven//:software_amazon_awssdk_auth",
+        "@maven//:software_amazon_awssdk_http_client_spi",
+        "@maven//:software_amazon_awssdk_regions",
+        "@maven//:software_amazon_awssdk_s3",
+        "@maven//:software_amazon_awssdk_sdk_core",
     ],
 )

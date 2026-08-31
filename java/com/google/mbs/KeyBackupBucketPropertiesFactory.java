@@ -22,7 +22,6 @@ public class KeyBackupBucketPropertiesFactory {
   private static final String S3_AES_ENCRYPTED_PRIVATE_KEY_NAME = "private/0/root_private_key.aes";
   private static final String S3_CERT_NAME = "public/0/root_certificate.pem";
   private static final String S3_ATTESTATION_DOC_NAME = "public/0/attestation_doc.base64";
-  private static final String S3_TLOG_ENTRY_NAME = "public/0/cert_tlog_entry.json";
   private static final String DEFAULT_CACHE_CONTROL = "public, max-age=120";
 
   private final String publicBucketName;
@@ -51,7 +50,6 @@ public class KeyBackupBucketPropertiesFactory {
         .setAesEncryptedPrivateKeyPath(S3_AES_ENCRYPTED_PRIVATE_KEY_NAME)
         .setCertPath(S3_CERT_NAME)
         .setAttestationDocPath(S3_ATTESTATION_DOC_NAME)
-        .setTlogEntryPath(S3_TLOG_ENTRY_NAME)
         .setCacheControl(DEFAULT_CACHE_CONTROL)
         .build();
   }

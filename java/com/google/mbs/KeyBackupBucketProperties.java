@@ -37,8 +37,6 @@ public abstract class KeyBackupBucketProperties {
 
   public abstract String getAttestationDocPath();
 
-  public abstract String getTlogEntryPath();
-
   public abstract String getCacheControl();
 
   @AutoValue.Builder
@@ -54,8 +52,6 @@ public abstract class KeyBackupBucketProperties {
     public abstract KeyBackupBucketProperties.Builder setCertPath(String value);
 
     public abstract KeyBackupBucketProperties.Builder setAttestationDocPath(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setTlogEntryPath(String value);
 
     public abstract KeyBackupBucketProperties.Builder setCacheControl(String value);
 

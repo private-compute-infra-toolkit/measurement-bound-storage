@@ -27,6 +27,9 @@ java_library(
     srcs = [
         "KeyBackupBucketProperties.java",
         "KeyBackupBucketPropertiesFactory.java",
+        "KeyBackupNotFoundException.java",
+        "KeyBackupStorage.java",
+        "KeyBackupStorageException.java",
         "KeyPairs.java",
         "KmsMeasurementBoundCertificateProvider.java",
         "MbsCertificateFactory.java",
@@ -34,6 +37,11 @@ java_library(
         "MeasurementBoundCertificateProvider.java",
         "Metrics.java",
         "NoOpMetrics.java",
+        "qualifier/AttestationUserData.java",
+        "qualifier/KmsKeyArn.java",
+        "qualifier/MbsRoot.java",
+        "qualifier/PrivateBackupBucket.java",
+        "qualifier/PublicBackupBucket.java",
     ],
     plugins = [":auto_value_plugin"],
     runtime_deps = [
@@ -43,7 +51,6 @@ java_library(
         "//java/com/google/kmsclient",
         "//java/com/google/kmsclient/aws",
         "//java/com/google/mbs/attestationcollection",
-        "//java/com/google/tlog",
         "@maven//:com_google_auto_value_auto_value_annotations",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_flogger_flogger",
@@ -51,19 +58,50 @@ java_library(
         "@maven//:jakarta_inject_jakarta_inject_api",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
-        "@maven//:software_amazon_awssdk_auth",
-        "@maven//:software_amazon_awssdk_s3",
-        "@maven//:software_amazon_awssdk_sdk_core",
     ],
 )
 
 java_library(
     name = "dummy_cert_provider",
-    srcs = ["DummyMeasurementBoundCertificateProvider.java"],
+    srcs = [
+        "DummyMbsModule.java",
+        "DummyMeasurementBoundCertificateProvider.java",
+    ],
     deps = [
         ":certmanagement",
         "//java/com/google/mbs/attestationcollection",
+        "@maven//:com_google_inject_guice",
+        "@maven//:jakarta_inject_jakarta_inject_api",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
+    ],
+)
+
+java_library(
+    name = "module",
+    srcs = [
+        "MbsCoreModule.java",
+        "MbsModule.java",
+    ],
+    deps = [
+        ":certmanagement",
+        "//java/com/google/kmsclient",
+        "//java/com/google/kmsclient/aws",
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/attestationcollection",
+        "//java/com/google/mbs/attestationcollection/aws",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_inject_guice",
+        "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:software_amazon_awssdk_s3",
+    ],
+)
+
+java_library(
+    name = "mbs",
+    exports = [
+        ":certmanagement",
+        ":module",
+        "//java/com/google/mbs/adapters",
     ],
 )

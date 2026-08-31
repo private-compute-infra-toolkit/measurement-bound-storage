@@ -79,7 +79,10 @@ maven.install(
         "jakarta.inject:jakarta.inject-api:2.0.1",
         "commons-io:commons-io:2.18.0",
         "com.google.inject:guice:7.0.0",
+        "com.google.inject.extensions:guice-testlib:7.0.0",
         "com.google.crypto.tink:tink:1.16.0",
+        "org.testcontainers:testcontainers:1.21.4",
+        "org.testcontainers:localstack:1.21.4",
     ],
     repositories = [
         "https://repo1.maven.org/maven2",
