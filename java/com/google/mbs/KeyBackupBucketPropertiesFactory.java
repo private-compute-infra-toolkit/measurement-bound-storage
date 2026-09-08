@@ -16,12 +16,15 @@
 
 package com.google.mbs;
 
+import com.google.mbs.domain.KeyBackupBucketProperties;
+
 public class KeyBackupBucketPropertiesFactory {
 
   private static final String S3_KMS_ENCRYPTED_DATA_KEY_NAME = "private/0/root_data_key.kms";
   private static final String S3_AES_ENCRYPTED_PRIVATE_KEY_NAME = "private/0/root_private_key.aes";
   private static final String S3_CERT_NAME = "public/0/root_certificate.pem";
   private static final String S3_ATTESTATION_DOC_NAME = "public/0/attestation_doc.base64";
+  private static final String S3_LOCK_NAME = "private/0/root_generation.lock";
   private static final String DEFAULT_CACHE_CONTROL = "public, max-age=120";
 
   private final String publicBucketName;
@@ -50,6 +53,7 @@ public class KeyBackupBucketPropertiesFactory {
         .setAesEncryptedPrivateKeyPath(S3_AES_ENCRYPTED_PRIVATE_KEY_NAME)
         .setCertPath(S3_CERT_NAME)
         .setAttestationDocPath(S3_ATTESTATION_DOC_NAME)
+        .setLockPath(S3_LOCK_NAME)
         .setCacheControl(DEFAULT_CACHE_CONTROL)
         .build();
   }

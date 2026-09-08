@@ -16,8 +16,8 @@
 
 package com.google.mbs.testing;
 
-import com.google.mbs.attestationcollection.AttestationCollector;
-import com.google.mbs.attestationcollection.AttestationToken;
+import com.google.mbs.domain.AttestationCollector;
+import com.google.mbs.domain.AttestationToken;
 import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 

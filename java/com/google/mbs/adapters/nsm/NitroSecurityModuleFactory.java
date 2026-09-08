@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,8 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.adapters.nsm;
 
-import com.google.mbs.domain.Metrics;
-
-/** A no-op implementation of {@link Metrics}. */
-public final class NoOpMetrics implements Metrics {
-  @Override
-  public void recordEvent(MbsEvent event) {
-    // No-op
-  }
-
-  @Override
-  public void setReloadStatus(ReloadStatus status) {
-    // No-op
-  }
+public interface NitroSecurityModuleFactory {
+  NitroSecurityModule create();
 }

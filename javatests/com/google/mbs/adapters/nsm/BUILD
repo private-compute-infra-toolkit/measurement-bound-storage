@@ -1,4 +1,4 @@
-# Copyright 2026 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,22 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_java//java:defs.bzl", "java_library")
-
-package(default_visibility = ["//visibility:public"])
+load("@rules_java//java:defs.bzl", "java_library", "java_test")
 
 java_library(
-    name = "testing",
-    testonly = True,
-    srcs = [
-        "FakeAttestationCollector.java",
-        "FakeKmsClient.java",
-        "S3TestClient.java",
-    ],
+    name = "tests",
+    srcs = ["NitroSecurityModuleTest.java"],
     deps = [
-        "//java/com/google/mbs/domain",
-        "@maven//:com_google_guava_guava",
-        "@maven//:software_amazon_awssdk_s3",
-        "@maven//:software_amazon_awssdk_sdk_core",
+        "//java/com/google/mbs/adapters/nsm",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
     ],
+)
+
+java_test(
+    name = "NitroSecurityModuleTest",
+    size = "small",
+    test_class = "com.google.mbs.adapters.nsm.NitroSecurityModuleTest",
+    runtime_deps = [":tests"],
 )

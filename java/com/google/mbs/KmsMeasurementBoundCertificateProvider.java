@@ -16,8 +16,10 @@
 
 package com.google.mbs;
 
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
+import static com.google.mbs.domain.Metrics.ReloadStatus.FAILURE;
+import static com.google.mbs.domain.Metrics.ReloadStatus.SUCCESS;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.flogger.FluentLogger;
 import com.google.crypto.tink.AccessesPartialKey;
 import com.google.crypto.tink.Aead;
@@ -28,11 +30,19 @@ import com.google.crypto.tink.aead.AeadConfig;
 import com.google.crypto.tink.aead.AesGcmKey;
 import com.google.crypto.tink.aead.PredefinedAeadParameters;
 import com.google.crypto.tink.util.SecretBytes;
-import com.google.kmsclient.KmsClientInterface;
-import com.google.kmsclient.KmsException;
-import com.google.kmsclient.KmsGeneratedKey;
-import com.google.mbs.attestationcollection.AttestationCollector;
-import com.google.mbs.attestationcollection.AttestationToken;
+import com.google.mbs.domain.AttestationCollector;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.KeyBackupNotFoundException;
+import com.google.mbs.domain.KeyBackupStorage;
+import com.google.mbs.domain.KeyBackupStorageException;
+import com.google.mbs.domain.KmsClientInterface;
+import com.google.mbs.domain.KmsException;
+import com.google.mbs.domain.KmsGeneratedKey;
+import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.StorageAlreadyLockedException;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.KmsKeyArn;
 import jakarta.inject.Inject;
@@ -47,15 +57,22 @@ import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
 
-public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundCertificateProvider {
+public class KmsMeasurementBoundCertificateProvider
+    implements MeasurementBoundCertificateProvider, MeasurementBoundCertificateReloader {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
   private static final String CERTIFICATE_TYPE = "X.509";
+  @VisibleForTesting Duration initialRetryBackoff = Duration.ofMillis(500);
+  @VisibleForTesting Duration maxRetryBackoff = Duration.ofSeconds(5);
+  @VisibleForTesting int maxLoadRetries = 0;
 
   static {
     if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -76,15 +93,8 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
   private final MbsCertificateFactory certificateFactory;
   private final Metrics metrics;
 
-  private final Supplier<MeasurementBoundCertificate> cachedCertificate =
-      Suppliers.memoize(
-          () -> {
-            try {
-              return executeLoadOrGenerateCertificate();
-            } catch (IOException | GeneralSecurityException | KmsException e) {
-              throw new RuntimeException(e);
-            }
-          });
+  private final AtomicReference<MeasurementBoundCertificate> currentCertificate =
+      new AtomicReference<>();
 
   @Inject
   KmsMeasurementBoundCertificateProvider(
@@ -104,16 +114,97 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
     this.metrics = metrics;
   }
 
-  public MeasurementBoundCertificate loadOrGenerateCertificate() {
-    return cachedCertificate.get();
+  @Override
+  public MeasurementBoundCertificate getCertificate() {
+    MeasurementBoundCertificate cert = currentCertificate.get();
+    if (cert != null) {
+      return cert;
+    }
+    synchronized (this) {
+      cert = currentCertificate.get();
+      return (cert != null) ? cert : reloadCertificate();
+    }
+  }
+
+  @Override
+  public synchronized MeasurementBoundCertificate reloadCertificate() {
+    try {
+      MeasurementBoundCertificate reloaded = executeLoadOrGenerateCertificate();
+      currentCertificate.set(reloaded);
+      metrics.setReloadStatus(SUCCESS);
+      return reloaded;
+    } catch (Exception e) {
+      metrics.setReloadStatus(FAILURE);
+      logger.atSevere().withCause(e).log(
+          "Failed to reload certificate from storage; active certificate remains unchanged");
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      if (e instanceof RuntimeException re) {
+        throw re;
+      }
+      throw new RuntimeException("Failed to reload certificate", e);
+    }
   }
 
   private MeasurementBoundCertificate executeLoadOrGenerateCertificate()
+      throws IOException, GeneralSecurityException, InterruptedException, KmsException {
+    Duration backoff = initialRetryBackoff;
+    for (int attempt = 1; ; attempt++) {
+      Optional<MeasurementBoundCertificate> cert = tryLoadExistingCertificate();
+      if (cert.isPresent()) {
+        return cert.get();
+      }
+
+      Optional<MeasurementBoundCertificate> lockedCert = tryAcquireLockAndLoadOrGenerate(attempt);
+      if (lockedCert.isPresent()) {
+        return lockedCert.get();
+      }
+
+      checkMaxRetries(attempt);
+
+      Thread.sleep(backoff.toMillis());
+      backoff = Duration.ofMillis(Math.min(backoff.toMillis() * 2, maxRetryBackoff.toMillis()));
+    }
+  }
+
+  private Optional<MeasurementBoundCertificate> tryLoadExistingCertificate()
+      throws GeneralSecurityException, KmsException, KeyBackupStorageException {
+    try {
+      return Optional.of(loadCertificate());
+    } catch (KeyBackupNotFoundException ignored) {
+      return Optional.empty();
+    }
+  }
+
+  private Optional<MeasurementBoundCertificate> tryAcquireLockAndLoadOrGenerate(int attempt)
       throws IOException, GeneralSecurityException, KmsException {
     try {
-      return loadCertificate();
-    } catch (KeyBackupNotFoundException e) {
-      return generateAndStoreCertificate();
+      storage.acquireLock();
+      MeasurementBoundCertificate mbc;
+      try {
+        mbc = loadCertificate();
+      } catch (KeyBackupNotFoundException ignored) {
+        mbc = generateAndStoreCertificate();
+      }
+      storage.releaseLock();
+      return Optional.of(mbc);
+    } catch (StorageAlreadyLockedException e) {
+      logger.atInfo().log(
+          "Root certificate generation lock is currently held (attempt %d). Waiting...", attempt);
+      return Optional.empty();
+    }
+  }
+
+  private void checkMaxRetries(int attempt) {
+    if (maxLoadRetries > 0 && attempt >= maxLoadRetries) {
+      logger.atSevere().log(
+          "Max retries (%d) exceeded while waiting for root certificate or lock."
+              + " Manual resolution / lock removal may be required.",
+          maxLoadRetries);
+      throw new IllegalStateException(
+          "Max retries exceeded while waiting for root certificate or lock. Manual lock"
+              + " resolution may be required.");
     }
   }
 
@@ -155,8 +246,10 @@ public class KmsMeasurementBoundCertificateProvider implements MeasurementBoundC
 
     storage.putAeadEncryptedPrivateKey(aeadEncryptedPrivateKey);
     storage.putKmsEncryptedDataKey(dataKey.ciphertext());
-    storage.putCertBytes(toPemBytes(certificate));
     storage.putAttestationDocBytes(token.getBytes());
+    // The public root certificate (certBytes) is written last as an atomic completion sentinel
+    // for polling readers in loadCertificate().
+    storage.putCertBytes(toPemBytes(certificate));
 
     metrics.recordEvent(Metrics.MbsEvent.SUCCESS);
     return new MeasurementBoundCertificate(certificate, privateKey, token);

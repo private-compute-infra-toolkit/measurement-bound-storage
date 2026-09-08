@@ -30,3 +30,49 @@ java_test(
         "@maven//:software_amazon_awssdk_sdk_core",
     ],
 )
+
+java_test(
+    name = "AwsAttestationCollectorTest",
+    size = "small",
+    srcs = ["AwsAttestationCollectorTest.java"],
+    resources = ["res/tca_root_certificate.pem"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/adapters/nsm",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "AwsKmsClientTest",
+    size = "small",
+    srcs = ["AwsKmsClientTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/adapters/nsm",
+        "//java/com/google/mbs/domain",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+        "@maven//:org_mockito_mockito_core",
+        "@maven//:software_amazon_awssdk_kms",
+        "@maven//:software_amazon_awssdk_sdk_core",
+    ],
+)
+
+java_test(
+    name = "MeasurementBoundCertificateMonitorTest",
+    size = "small",
+    srcs = ["MeasurementBoundCertificateMonitorTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)

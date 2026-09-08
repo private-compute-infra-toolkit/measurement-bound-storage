@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
-import com.google.mbs.domain.Metrics;
+/**
+ * Lifecycle interface for the host service (e.g., TCA) to control background certificate
+ * monitoring.
+ */
+public interface CertificateMonitor {
 
-/** A no-op implementation of {@link Metrics}. */
-public final class NoOpMetrics implements Metrics {
-  @Override
-  public void recordEvent(MbsEvent event) {
-    // No-op
-  }
+  /** Starts the background certificate monitor service. */
+  void start();
 
-  @Override
-  public void setReloadStatus(ReloadStatus status) {
-    // No-op
-  }
+  /** Stops the background certificate monitor service. */
+  void stop();
+
+  /** Returns whether the certificate monitor service is currently running. */
+  boolean isRunning();
 }

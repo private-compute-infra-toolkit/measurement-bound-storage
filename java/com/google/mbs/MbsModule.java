@@ -18,8 +18,6 @@ package com.google.mbs;
 
 import com.google.common.base.Preconditions;
 import com.google.inject.AbstractModule;
-import com.google.kmsclient.aws.AwsKmsClientModule;
-import com.google.mbs.attestationcollection.aws.AwsAttestationModule;
 
 /** Guice module encapsulating AWS KMS and Nitro Attestation-backed Measurement Bound Storage. */
 public final class MbsModule extends AbstractModule {
@@ -32,8 +30,7 @@ public final class MbsModule extends AbstractModule {
 
   @Override
   protected void configure() {
-    install(new AwsKmsClientModule(awsRegion));
-    install(new AwsAttestationModule());
+    install(new AwsMbsModule(awsRegion));
     install(new MbsCoreModule());
   }
 }

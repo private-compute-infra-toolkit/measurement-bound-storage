@@ -17,40 +17,26 @@
 package com.google.mbs;
 
 import com.google.inject.AbstractModule;
-import com.google.inject.Provides;
-import com.google.mbs.qualifier.MbsRoot;
+import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.Metrics;
 import jakarta.inject.Singleton;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 
 /** Guice module for in-memory, self-signed Measurement Bound Storage used in local mode testing. */
 public final class DummyMbsModule extends AbstractModule {
 
   @Override
   protected void configure() {
+    bind(DummyMeasurementBoundCertificateProvider.class).in(Singleton.class);
     bind(MeasurementBoundCertificateProvider.class)
-        .to(DummyMeasurementBoundCertificateProvider.class)
-        .in(Singleton.class);
-  }
+        .to(DummyMeasurementBoundCertificateProvider.class);
+    bind(MeasurementBoundCertificateReloader.class)
+        .to(DummyMeasurementBoundCertificateProvider.class);
 
-  @Provides
-  @Singleton
-  MeasurementBoundCertificate provideMeasurementBoundCertificate(
-      MeasurementBoundCertificateProvider provider) {
-    return provider.loadOrGenerateCertificate();
-  }
+    bind(Metrics.class).to(NoOpMetrics.class).in(Singleton.class);
 
-  @Provides
-  @Singleton
-  @MbsRoot
-  X509Certificate provideRootCertificate(MeasurementBoundCertificate cert) {
-    return cert.getCertificate();
-  }
-
-  @Provides
-  @Singleton
-  @MbsRoot
-  PrivateKey provideRootPrivateKey(MeasurementBoundCertificate cert) {
-    return cert.getPrivateKey();
+    bind(CertificateMonitor.class).to(MeasurementBoundCertificateMonitor.class).in(Singleton.class);
   }
 }

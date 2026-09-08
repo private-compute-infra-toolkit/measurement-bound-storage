@@ -17,6 +17,7 @@
 package com.google.mbs;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -25,14 +26,26 @@ import static org.mockito.Mockito.mock;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.mbs.adapters.AwsAttestationCollector;
+import com.google.mbs.adapters.AwsKmsClient;
+import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
 import com.google.mbs.adapters.S3KeyBackupStorage;
+import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
+import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
+import com.google.mbs.domain.AttestationCollector;
+import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.KeyBackupBucketProperties;
+import com.google.mbs.domain.KeyBackupStorage;
+import com.google.mbs.domain.KmsClientInterface;
+import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.Metrics;
 import com.google.mbs.qualifier.AttestationUserData;
+import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
-import com.google.mbs.qualifier.MbsRoot;
 import com.google.mbs.qualifier.PrivateBackupBucket;
 import com.google.mbs.qualifier.PublicBackupBucket;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -50,16 +63,26 @@ public class MbsModuleTest {
     assertNotNull(provider);
     assertTrue(provider instanceof DummyMeasurementBoundCertificateProvider);
 
-    MeasurementBoundCertificate mbc = injector.getInstance(MeasurementBoundCertificate.class);
-    assertNotNull(mbc);
+    MeasurementBoundCertificateReloader reloader =
+        injector.getInstance(MeasurementBoundCertificateReloader.class);
+    assertNotNull(reloader);
+    assertSame(provider, reloader);
 
-    X509Certificate cert =
-        injector.getInstance(com.google.inject.Key.get(X509Certificate.class, MbsRoot.class));
-    assertNotNull(cert);
+    MeasurementBoundCertificate mbc1 = provider.getCertificate();
+    assertNotNull(mbc1);
+    assertNotNull(mbc1.getCertificate());
+    assertNotNull(mbc1.getPrivateKey());
 
-    PrivateKey privateKey =
-        injector.getInstance(com.google.inject.Key.get(PrivateKey.class, MbsRoot.class));
-    assertNotNull(privateKey);
+    MeasurementBoundCertificate mbc2 = reloader.reloadCertificate();
+    assertNotNull(mbc2);
+    assertNotNull(mbc2.getCertificate());
+    assertNotNull(mbc2.getPrivateKey());
+    assertNotEquals(
+        mbc1.getCertificate().getSerialNumber(), mbc2.getCertificate().getSerialNumber());
+
+    CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
+    assertNotNull(scheduler);
+    assertTrue(scheduler instanceof MeasurementBoundCertificateMonitor);
   }
 
   @Test
@@ -80,6 +103,9 @@ public class MbsModuleTest {
                 bind(String.class)
                     .annotatedWith(KmsKeyArn.class)
                     .toInstance("arn:aws:kms:us-east-1:12345:key/abc");
+                bind(String.class)
+                    .annotatedWith(InstanceId.class)
+                    .toInstance("i-1234567890abcdef0");
                 bind(byte[].class).annotatedWith(AttestationUserData.class).toInstance(new byte[0]);
                 bind(MbsCertificateFactory.class).toInstance(mock(MbsCertificateFactory.class));
                 bind(Metrics.class).toInstance(mock(Metrics.class));
@@ -91,6 +117,11 @@ public class MbsModuleTest {
     assertNotNull(provider);
     assertTrue(provider instanceof KmsMeasurementBoundCertificateProvider);
 
+    MeasurementBoundCertificateReloader reloader =
+        injector.getInstance(MeasurementBoundCertificateReloader.class);
+    assertNotNull(reloader);
+    assertSame(provider, reloader);
+
     KeyBackupBucketProperties bucketProps = injector.getInstance(KeyBackupBucketProperties.class);
     assertNotNull(bucketProps);
     assertEquals("test-public-bucket", bucketProps.getPublicBucketName());
@@ -101,5 +132,34 @@ public class MbsModuleTest {
     assertNotNull(storage1);
     assertSame(storage1, storage2);
     assertTrue(storage1 instanceof S3KeyBackupStorage);
+
+    NitroSecurityModuleFactory nsmFactory = injector.getInstance(NitroSecurityModuleFactory.class);
+    assertNotNull(nsmFactory);
+    assertTrue(nsmFactory instanceof DefaultNitroSecurityModuleFactory);
+
+    KmsClientInterface kmsClient = injector.getInstance(KmsClientInterface.class);
+    assertNotNull(kmsClient);
+    assertTrue(kmsClient instanceof AwsKmsClient);
+
+    CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
+    assertNotNull(scheduler);
+    assertTrue(scheduler instanceof MeasurementBoundCertificateMonitor);
+  }
+
+  @Test
+  public void testAwsMbsModuleBindsComponents() {
+    Injector injector = Guice.createInjector(new AwsMbsModule("us-east-1"));
+
+    NitroSecurityModuleFactory factory = injector.getInstance(NitroSecurityModuleFactory.class);
+    assertNotNull(factory);
+    assertTrue(factory instanceof DefaultNitroSecurityModuleFactory);
+
+    KmsClientInterface kmsClient = injector.getInstance(KmsClientInterface.class);
+    assertNotNull(kmsClient);
+    assertTrue(kmsClient instanceof AwsKmsClient);
+
+    AttestationCollector attestationCollector = injector.getInstance(AttestationCollector.class);
+    assertNotNull(attestationCollector);
+    assertTrue(attestationCollector instanceof AwsAttestationCollector);
   }
 }

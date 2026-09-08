@@ -19,11 +19,23 @@ package(default_visibility = ["//visibility:public"])
 java_library(
     name = "adapters",
     srcs = [
+        "AwsAttestationCollector.java",
+        "AwsKmsClient.java",
+        "MeasurementBoundCertificateMonitor.java",
         "S3KeyBackupStorage.java",
     ],
     deps = [
         "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs/adapters/nsm",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_flogger_flogger",
+        "@maven//:com_google_guava_guava",
         "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+        "@maven//:software_amazon_awssdk_auth",
+        "@maven//:software_amazon_awssdk_kms",
+        "@maven//:software_amazon_awssdk_regions",
         "@maven//:software_amazon_awssdk_s3",
         "@maven//:software_amazon_awssdk_sdk_core",
     ],

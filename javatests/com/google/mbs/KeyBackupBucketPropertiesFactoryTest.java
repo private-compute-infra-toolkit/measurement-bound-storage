@@ -18,6 +18,7 @@ package com.google.mbs;
 
 import static org.junit.Assert.assertEquals;
 
+import com.google.mbs.domain.KeyBackupBucketProperties;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -38,6 +39,7 @@ public class KeyBackupBucketPropertiesFactoryTest {
     assertEquals("private/0/root_private_key.aes", properties.getAesEncryptedPrivateKeyPath());
     assertEquals("public/0/root_certificate.pem", properties.getCertPath());
     assertEquals("public/0/attestation_doc.base64", properties.getAttestationDocPath());
+    assertEquals("private/0/root_generation.lock", properties.getLockPath());
     assertEquals("public, max-age=120", properties.getCacheControl());
   }
 }

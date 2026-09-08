@@ -24,12 +24,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.KeyBackupBucketProperties;
 import com.google.mbs.KeyBackupBucketPropertiesFactory;
-import com.google.mbs.KeyBackupNotFoundException;
-import com.google.mbs.KeyBackupStorageException;
-import com.google.mbs.Metrics;
-import com.google.mbs.Metrics.MbsEvent;
+import com.google.mbs.domain.KeyBackupBucketProperties;
+import com.google.mbs.domain.KeyBackupNotFoundException;
+import com.google.mbs.domain.KeyBackupStorageException;
+import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.Metrics.MbsEvent;
+import com.google.mbs.domain.StorageAlreadyLockedException;
 import java.nio.charset.StandardCharsets;
 import org.junit.Before;
 import org.junit.Test;
@@ -54,6 +55,7 @@ public class S3KeyBackupStorageTest {
 
   private static final String PUBLIC_BUCKET = "public-bucket";
   private static final String PRIVATE_BUCKET = "private-bucket";
+  private static final String TEST_INSTANCE_ID = "i-testinstance123";
   private static final byte[] SAMPLE_DATA = "test-bytes".getBytes(StandardCharsets.UTF_8);
 
   @Mock private S3Client s3Client;
@@ -66,7 +68,7 @@ public class S3KeyBackupStorageTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     bucketProperties = new KeyBackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
-    storage = new S3KeyBackupStorage(s3Client, bucketProperties, metrics);
+    storage = new S3KeyBackupStorage(s3Client, bucketProperties, TEST_INSTANCE_ID, metrics);
   }
 
   @Test
@@ -236,5 +238,66 @@ public class S3KeyBackupStorageTest {
     verify(s3Client).putObject(requestCaptor.capture(), any(RequestBody.class));
     assertThat(requestCaptor.getValue().bucket()).isEqualTo(PUBLIC_BUCKET);
     assertThat(requestCaptor.getValue().key()).isEqualTo(bucketProperties.getAttestationDocPath());
+  }
+
+  @Test
+  public void acquireLock_success() throws Exception {
+    storage.acquireLock();
+
+    ArgumentCaptor<PutObjectRequest> requestCaptor =
+        ArgumentCaptor.forClass(PutObjectRequest.class);
+    ArgumentCaptor<RequestBody> bodyCaptor = ArgumentCaptor.forClass(RequestBody.class);
+    verify(s3Client).putObject(requestCaptor.capture(), bodyCaptor.capture());
+    assertThat(requestCaptor.getValue().bucket()).isEqualTo(PRIVATE_BUCKET);
+    assertThat(requestCaptor.getValue().key()).isEqualTo(bucketProperties.getLockPath());
+    assertThat(requestCaptor.getValue().cacheControl()).isEqualTo("no-cache");
+    assertThat(requestCaptor.getValue().overrideConfiguration().isPresent()).isTrue();
+    assertThat(
+            requestCaptor.getValue().overrideConfiguration().get().headers().get("If-None-Match"))
+        .containsExactly("*");
+    byte[] content = bodyCaptor.getValue().contentStreamProvider().newStream().readAllBytes();
+    assertThat(new String(content, StandardCharsets.UTF_8)).isEqualTo(TEST_INSTANCE_ID);
+  }
+
+  @Test
+  public void acquireLock_lockFileAlreadyExists_throwsStorageAlreadyLockedException() {
+    when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+        .thenThrow(
+            software.amazon.awssdk.services.s3.model.S3Exception.builder()
+                .statusCode(412)
+                .message("PreconditionFailed")
+                .build());
+
+    assertThrows(StorageAlreadyLockedException.class, () -> storage.acquireLock());
+  }
+
+  @Test
+  public void acquireLock_s3WriteFailure_recordsMetricAndThrowsStorageException() {
+    when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+        .thenThrow(SdkClientException.create("S3 network failure"));
+
+    assertThrows(KeyBackupStorageException.class, () -> storage.acquireLock());
+    verify(metrics).recordEvent(MbsEvent.S3_WRITE_FAILED);
+  }
+
+  @Test
+  public void releaseLock_success() {
+    storage.releaseLock();
+
+    ArgumentCaptor<software.amazon.awssdk.services.s3.model.DeleteObjectRequest> requestCaptor =
+        ArgumentCaptor.forClass(software.amazon.awssdk.services.s3.model.DeleteObjectRequest.class);
+    verify(s3Client).deleteObject(requestCaptor.capture());
+    assertThat(requestCaptor.getValue().bucket()).isEqualTo(PRIVATE_BUCKET);
+    assertThat(requestCaptor.getValue().key()).isEqualTo(bucketProperties.getLockPath());
+  }
+
+  @Test
+  public void releaseLock_s3Failure_doesNotThrow() {
+    when(s3Client.deleteObject(
+            any(software.amazon.awssdk.services.s3.model.DeleteObjectRequest.class)))
+        .thenThrow(SdkClientException.create("S3 network failure"));
+
+    // releaseLock should catch exception and log warning without throwing
+    storage.releaseLock();
   }
 }

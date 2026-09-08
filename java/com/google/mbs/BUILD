@@ -25,32 +25,27 @@ java_plugin(
 java_library(
     name = "certmanagement",
     srcs = [
-        "KeyBackupBucketProperties.java",
         "KeyBackupBucketPropertiesFactory.java",
-        "KeyBackupNotFoundException.java",
-        "KeyBackupStorage.java",
-        "KeyBackupStorageException.java",
         "KeyPairs.java",
         "KmsMeasurementBoundCertificateProvider.java",
         "MbsCertificateFactory.java",
-        "MeasurementBoundCertificate.java",
-        "MeasurementBoundCertificateProvider.java",
-        "Metrics.java",
         "NoOpMetrics.java",
         "qualifier/AttestationUserData.java",
+        "qualifier/InstanceId.java",
         "qualifier/KmsKeyArn.java",
         "qualifier/MbsRoot.java",
         "qualifier/PrivateBackupBucket.java",
         "qualifier/PublicBackupBucket.java",
     ],
     plugins = [":auto_value_plugin"],
+    exports = [
+        "//java/com/google/mbs/domain",
+    ],
     runtime_deps = [
         "@maven//:com_google_flogger_flogger_system_backend",
     ],
     deps = [
-        "//java/com/google/kmsclient",
-        "//java/com/google/kmsclient/aws",
-        "//java/com/google/mbs/attestationcollection",
+        "//java/com/google/mbs/domain",
         "@maven//:com_google_auto_value_auto_value_annotations",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_flogger_flogger",
@@ -69,7 +64,8 @@ java_library(
     ],
     deps = [
         ":certmanagement",
-        "//java/com/google/mbs/attestationcollection",
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
         "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
@@ -80,19 +76,21 @@ java_library(
 java_library(
     name = "module",
     srcs = [
+        "AwsMbsModule.java",
         "MbsCoreModule.java",
         "MbsModule.java",
     ],
     deps = [
         ":certmanagement",
-        "//java/com/google/kmsclient",
-        "//java/com/google/kmsclient/aws",
         "//java/com/google/mbs/adapters",
-        "//java/com/google/mbs/attestationcollection",
-        "//java/com/google/mbs/attestationcollection/aws",
+        "//java/com/google/mbs/adapters/nsm",
+        "//java/com/google/mbs/domain",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
+        "@maven//:software_amazon_awssdk_auth",
+        "@maven//:software_amazon_awssdk_kms",
+        "@maven//:software_amazon_awssdk_regions",
         "@maven//:software_amazon_awssdk_s3",
     ],
 )
@@ -104,4 +102,9 @@ java_library(
         ":module",
         "//java/com/google/mbs/adapters",
     ],
+)
+
+alias(
+    name = "nsm_jni_tar",
+    actual = "//java/com/google/mbs/adapters/nsm:nsm_jni_tar",
 )

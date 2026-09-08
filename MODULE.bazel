@@ -48,7 +48,7 @@ llvm.sysroot(
 
 http_archive(
     name = "aws-nitro-enclaves-nsm-api_src",
-    build_file = "//java/com/google/platform/aws/nsm:libnsm_static.BUILD",
+    build_file = "//java/com/google/mbs/adapters/nsm:libnsm_static.BUILD",
     sha256 = "b31783dba1a8e52f2232f79362886fe18e50d077f2e15f487779ed8677ffe905",
     strip_prefix = "aws-nitro-enclaves-nsm-api-0.4.0",
     urls = ["https://github.com/aws/aws-nitro-enclaves-nsm-api/archive/refs/tags/v0.4.0.tar.gz"],

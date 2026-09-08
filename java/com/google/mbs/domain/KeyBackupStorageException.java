@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
-import com.google.mbs.domain.Metrics;
+/** Exception thrown when an error occurs while interacting with MBS backup storage. */
+public class KeyBackupStorageException extends RuntimeException {
 
-/** A no-op implementation of {@link Metrics}. */
-public final class NoOpMetrics implements Metrics {
-  @Override
-  public void recordEvent(MbsEvent event) {
-    // No-op
+  public KeyBackupStorageException(String message) {
+    super(message);
   }
 
-  @Override
-  public void setReloadStatus(ReloadStatus status) {
-    // No-op
+  public KeyBackupStorageException(String message, Throwable cause) {
+    super(message, cause);
   }
 }

@@ -16,7 +16,10 @@
 
 package com.google.mbs;
 
-import com.google.mbs.attestationcollection.AttestationToken;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.MeasurementBoundCertificateReloader;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
@@ -32,7 +35,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 /** In-memory, placeholder implementation of MeasurementBoundCertificateProfider. */
 public class DummyMeasurementBoundCertificateProvider
-    implements MeasurementBoundCertificateProvider {
+    implements MeasurementBoundCertificateProvider, MeasurementBoundCertificateReloader {
   // RFC 5280 limits the serial number to 20 bytes (160 bits).
   // A positive BigInteger requires 1 bit for the sign, leaving 159 bits for entropy.
   private static final int SERIAL_NUMBER_ENTROPY_BITS = 159;
@@ -41,7 +44,7 @@ public class DummyMeasurementBoundCertificateProvider
   private MeasurementBoundCertificate mbc = null;
 
   @Override
-  public synchronized MeasurementBoundCertificate loadOrGenerateCertificate() {
+  public synchronized MeasurementBoundCertificate getCertificate() {
     if (mbc != null) {
       return mbc;
     }
@@ -50,6 +53,16 @@ public class DummyMeasurementBoundCertificateProvider
       return mbc;
     } catch (Exception e) {
       throw new RuntimeException("Failed to generate certificate", e);
+    }
+  }
+
+  @Override
+  public synchronized MeasurementBoundCertificate reloadCertificate() {
+    try {
+      mbc = generateNewCertificate();
+      return mbc;
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to reload certificate", e);
     }
   }
 

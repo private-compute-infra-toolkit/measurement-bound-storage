@@ -17,9 +17,9 @@
 package com.google.mbs.testing;
 
 import com.google.common.io.BaseEncoding;
-import com.google.kmsclient.KmsClientInterface;
-import com.google.kmsclient.KmsException;
-import com.google.kmsclient.KmsGeneratedKey;
+import com.google.mbs.domain.KmsClientInterface;
+import com.google.mbs.domain.KmsException;
+import com.google.mbs.domain.KmsGeneratedKey;
 import java.security.SecureRandom;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;

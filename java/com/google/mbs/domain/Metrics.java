@@ -14,19 +14,27 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
-import com.google.mbs.domain.Metrics;
-
-/** A no-op implementation of {@link Metrics}. */
-public final class NoOpMetrics implements Metrics {
-  @Override
-  public void recordEvent(MbsEvent event) {
-    // No-op
+/** Port for reporting metrics from MBS library. */
+public interface Metrics {
+  /** Events that can be reported by MBS. */
+  enum MbsEvent {
+    SUCCESS,
+    S3_FETCH_FAILED,
+    S3_WRITE_FAILED,
+    KMS_OPERATION_FAILED,
   }
 
-  @Override
-  public void setReloadStatus(ReloadStatus status) {
-    // No-op
+  /** Records the occurrence of an MBS event. */
+  void recordEvent(MbsEvent event);
+
+  /** Status of certificate reloading. */
+  enum ReloadStatus {
+    SUCCESS,
+    FAILURE,
   }
+
+  /** Sets the status of certificate reloading. */
+  void setReloadStatus(ReloadStatus status);
 }

@@ -19,17 +19,22 @@ package com.google.mbs;
 import com.google.inject.AbstractModule;
 import com.google.inject.Key;
 import com.google.inject.Provides;
-import com.google.kmsclient.KmsClientInterface;
+import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
 import com.google.mbs.adapters.S3KeyBackupStorage;
-import com.google.mbs.attestationcollection.AttestationCollector;
+import com.google.mbs.domain.AttestationCollector;
+import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.KeyBackupBucketProperties;
+import com.google.mbs.domain.KeyBackupStorage;
+import com.google.mbs.domain.KmsClientInterface;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.Metrics;
 import com.google.mbs.qualifier.AttestationUserData;
+import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
-import com.google.mbs.qualifier.MbsRoot;
 import com.google.mbs.qualifier.PrivateBackupBucket;
 import com.google.mbs.qualifier.PublicBackupBucket;
 import jakarta.inject.Singleton;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /** Guice core module configuring MBS certificate provider and storage port. */
@@ -44,14 +49,19 @@ final class MbsCoreModule extends AbstractModule {
     requireBinding(Key.get(String.class, PrivateBackupBucket.class));
     requireBinding(Key.get(String.class, KmsKeyArn.class));
     requireBinding(Key.get(byte[].class, AttestationUserData.class));
+    requireBinding(Key.get(String.class, InstanceId.class));
     requireBinding(MbsCertificateFactory.class);
     requireBinding(Metrics.class);
 
     bind(KeyBackupStorage.class).to(S3KeyBackupStorage.class).in(Singleton.class);
 
+    bind(KmsMeasurementBoundCertificateProvider.class).in(Singleton.class);
     bind(MeasurementBoundCertificateProvider.class)
-        .to(KmsMeasurementBoundCertificateProvider.class)
-        .in(Singleton.class);
+        .to(KmsMeasurementBoundCertificateProvider.class);
+    bind(MeasurementBoundCertificateReloader.class)
+        .to(KmsMeasurementBoundCertificateProvider.class);
+
+    bind(CertificateMonitor.class).to(MeasurementBoundCertificateMonitor.class).in(Singleton.class);
   }
 
   @Provides
@@ -59,26 +69,5 @@ final class MbsCoreModule extends AbstractModule {
   KeyBackupBucketProperties provideKeyBackupBucketProperties(
       @PublicBackupBucket String publicBucketName, @PrivateBackupBucket String privateBucketName) {
     return new KeyBackupBucketPropertiesFactory(publicBucketName, privateBucketName).create();
-  }
-
-  @Provides
-  @Singleton
-  MeasurementBoundCertificate provideMeasurementBoundCertificate(
-      MeasurementBoundCertificateProvider provider) {
-    return provider.loadOrGenerateCertificate();
-  }
-
-  @Provides
-  @Singleton
-  @MbsRoot
-  X509Certificate provideRootCertificate(MeasurementBoundCertificate cert) {
-    return cert.getCertificate();
-  }
-
-  @Provides
-  @Singleton
-  @MbsRoot
-  PrivateKey provideRootPrivateKey(MeasurementBoundCertificate cert) {
-    return cert.getPrivateKey();
   }
 }
