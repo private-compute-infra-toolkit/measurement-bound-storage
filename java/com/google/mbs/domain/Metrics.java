@@ -21,6 +21,7 @@ public interface Metrics {
   /** Events that can be reported by MBS. */
   enum MbsEvent {
     SUCCESS,
+    WAITING_FOR_MBS_LOCK,
     S3_FETCH_FAILED,
     S3_WRITE_FAILED,
     KMS_OPERATION_FAILED,

@@ -156,11 +156,12 @@ public class KmsMeasurementBoundCertificateProvider
         return cert.get();
       }
 
-      Optional<MeasurementBoundCertificate> lockedCert = tryAcquireLockAndLoadOrGenerate(attempt);
+      Optional<MeasurementBoundCertificate> lockedCert = tryAcquireLockAndLoadOrGenerate();
       if (lockedCert.isPresent()) {
         return lockedCert.get();
       }
 
+      handleLockContention(attempt);
       checkMaxRetries(attempt);
 
       Thread.sleep(backoff.toMillis());
@@ -177,7 +178,7 @@ public class KmsMeasurementBoundCertificateProvider
     }
   }
 
-  private Optional<MeasurementBoundCertificate> tryAcquireLockAndLoadOrGenerate(int attempt)
+  private Optional<MeasurementBoundCertificate> tryAcquireLockAndLoadOrGenerate()
       throws IOException, GeneralSecurityException, KmsException {
     try {
       storage.acquireLock();
@@ -190,8 +191,6 @@ public class KmsMeasurementBoundCertificateProvider
       storage.releaseLock();
       return Optional.of(mbc);
     } catch (StorageAlreadyLockedException e) {
-      logger.atInfo().log(
-          "Root certificate generation lock is currently held (attempt %d). Waiting...", attempt);
       return Optional.empty();
     }
   }
@@ -206,6 +205,12 @@ public class KmsMeasurementBoundCertificateProvider
           "Max retries exceeded while waiting for root certificate or lock. Manual lock"
               + " resolution may be required.");
     }
+  }
+
+  private void handleLockContention(int attempt) {
+    logger.atInfo().log(
+        "Root certificate generation lock is currently held (attempt %d). Waiting...", attempt);
+    metrics.recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
   }
 
   private MeasurementBoundCertificate loadCertificate()

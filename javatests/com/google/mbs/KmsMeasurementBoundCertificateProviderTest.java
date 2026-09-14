@@ -26,6 +26,7 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -614,6 +615,89 @@ public class KmsMeasurementBoundCertificateProviderTest {
         () -> {
           certificateProvider.getCertificate();
         });
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_lockContention_emitsWaitingForMbsLockEvent()
+      throws Exception {
+    certificateProvider.maxLoadRetries = 3;
+    when(storage.getCertBytes()).thenThrow(new KeyBackupNotFoundException("Cert not found"));
+    doThrow(new StorageAlreadyLockedException("Already locked")).when(storage).acquireLock();
+
+    assertThrows(
+        IllegalStateException.class,
+        () -> {
+          certificateProvider.getCertificate();
+        });
+
+    verify(mockMetrics, times(3)).recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
+    verify(mockMetrics, never()).recordEvent(Metrics.MbsEvent.SUCCESS);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_noLockContention_doesNotEmitWaitingForMbsLockEvent()
+      throws Exception {
+    when(storage.getCertBytes()).thenThrow(new KeyBackupNotFoundException("Cert not found"));
+
+    byte[] dataKeyPlaintext = generateAesKey();
+    byte[] dataKeyCiphertext = "test-ciphertext-key".getBytes(StandardCharsets.UTF_8);
+    KmsGeneratedKey kmsGeneratedKey =
+        KmsGeneratedKey.builder()
+            .setPlaintext(dataKeyPlaintext)
+            .setCiphertext(dataKeyCiphertext)
+            .build();
+    when(kmsClient.generateDataKey(KMS_KEY_ARN)).thenReturn(kmsGeneratedKey);
+
+    byte[] attestationDoc = "Mocked attestation doc".getBytes(StandardCharsets.UTF_8);
+    AttestationToken token = AttestationToken.fromBytes(attestationDoc);
+    when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
+
+    MeasurementBoundCertificate result = certificateProvider.getCertificate();
+
+    assertNotNull(result);
+    verify(mockMetrics, never()).recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
+  }
+
+  @Test
+  public void loadOrGenerateCertificate_lockContentionThenRecovers_emitsWaitingThenSuccess()
+      throws Exception {
+    certificateProvider.maxLoadRetries = 5;
+    when(storage.getCertBytes()).thenThrow(new KeyBackupNotFoundException("Cert not found"));
+
+    int[] lockAttempts = new int[1];
+    doAnswer(
+            invocation -> {
+              if (++lockAttempts[0] <= 2) {
+                throw new StorageAlreadyLockedException("Already locked");
+              }
+              return null;
+            })
+        .when(storage)
+        .acquireLock();
+
+    byte[] dataKeyPlaintext = generateAesKey();
+    byte[] dataKeyCiphertext = "test-ciphertext-key".getBytes(StandardCharsets.UTF_8);
+    KmsGeneratedKey kmsGeneratedKey =
+        KmsGeneratedKey.builder()
+            .setPlaintext(dataKeyPlaintext)
+            .setCiphertext(dataKeyCiphertext)
+            .build();
+    when(kmsClient.generateDataKey(KMS_KEY_ARN)).thenReturn(kmsGeneratedKey);
+
+    byte[] attestationDoc = "Mocked attestation doc".getBytes(StandardCharsets.UTF_8);
+    AttestationToken token = AttestationToken.fromBytes(attestationDoc);
+    when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
+
+    MeasurementBoundCertificate result = certificateProvider.getCertificate();
+
+    assertNotNull(result);
+    // Attempts 1 and 2 encountered lock contention, emitting WAITING_FOR_MBS_LOCK before succeeding
+    // on
+    // attempt 3
+    verify(mockMetrics, times(2)).recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
+    verify(storage).releaseLock();
   }
 
   @Test

@@ -26,26 +26,21 @@ java_library(
     name = "certmanagement",
     srcs = [
         "KeyBackupBucketPropertiesFactory.java",
-        "KeyPairs.java",
         "KmsMeasurementBoundCertificateProvider.java",
         "MbsCertificateFactory.java",
         "NoOpMetrics.java",
-        "qualifier/AttestationUserData.java",
-        "qualifier/InstanceId.java",
-        "qualifier/KmsKeyArn.java",
-        "qualifier/MbsRoot.java",
-        "qualifier/PrivateBackupBucket.java",
-        "qualifier/PublicBackupBucket.java",
     ],
     plugins = [":auto_value_plugin"],
     exports = [
         "//java/com/google/mbs/domain",
+        "//java/com/google/mbs/qualifier",
     ],
     runtime_deps = [
         "@maven//:com_google_flogger_flogger_system_backend",
     ],
     deps = [
         "//java/com/google/mbs/domain",
+        "//java/com/google/mbs/qualifier",
         "@maven//:com_google_auto_value_auto_value_annotations",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_flogger_flogger",
@@ -101,6 +96,7 @@ java_library(
         ":certmanagement",
         ":module",
         "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/qualifier",
     ],
 )
 
