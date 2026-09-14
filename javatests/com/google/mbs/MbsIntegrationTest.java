@@ -22,6 +22,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import com.google.inject.AbstractModule;
@@ -220,9 +221,14 @@ public class MbsIntegrationTest {
     Injector injector = createTestInjector();
     MeasurementBoundCertificateProvider provider =
         injector.getInstance(MeasurementBoundCertificateProvider.class);
+    MeasurementBoundCertificateReloader reloader =
+        injector.getInstance(MeasurementBoundCertificateReloader.class);
+
+    assertThrows(IllegalStateException.class, provider::getCertificate);
+
+    reloader.reloadCertificate();
 
     MeasurementBoundCertificate mbc = provider.getCertificate();
-
     assertNotNull(mbc);
     assertNotNull(mbc.getCertificate());
     assertNotNull(mbc.getPrivateKey());
@@ -255,9 +261,11 @@ public class MbsIntegrationTest {
   public void loadOrGenerateCertificate_existingStorage_loadsStoredCertificate() throws Exception {
     // Generate initial certificate and artifacts in S3
     Injector firstInjector = createTestInjector();
-    MeasurementBoundCertificateProvider firstProvider =
-        firstInjector.getInstance(MeasurementBoundCertificateProvider.class);
-    MeasurementBoundCertificate initialMbc = firstProvider.getCertificate();
+    MeasurementBoundCertificateReloader firstReloader =
+        firstInjector.getInstance(MeasurementBoundCertificateReloader.class);
+    firstReloader.reloadCertificate();
+    MeasurementBoundCertificate initialMbc =
+        firstInjector.getInstance(MeasurementBoundCertificateProvider.class).getCertificate();
 
     byte[] initialCertBytes = s3TestClient.getFile(PUBLIC_BUCKET, bucketProperties.getCertPath());
     byte[] initialKmsKeyBytes =
@@ -265,11 +273,14 @@ public class MbsIntegrationTest {
     byte[] initialAesKeyBytes =
         s3TestClient.getFile(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath());
 
-    // Create a second injector and provider simulating a fresh enclave start
+    // Create a second injector simulating a fresh enclave start
     Injector secondInjector = createTestInjector();
+    MeasurementBoundCertificateReloader secondReloader =
+        secondInjector.getInstance(MeasurementBoundCertificateReloader.class);
     MeasurementBoundCertificateProvider secondProvider =
         secondInjector.getInstance(MeasurementBoundCertificateProvider.class);
 
+    secondReloader.reloadCertificate();
     MeasurementBoundCertificate loadedMbc = secondProvider.getCertificate();
 
     assertNotNull(loadedMbc);
@@ -295,7 +306,7 @@ public class MbsIntegrationTest {
   @Test
   public void loadOrGenerateCertificate_missingRootCert_triggersRegeneration() throws Exception {
     Injector firstInjector = createTestInjector();
-    firstInjector.getInstance(MeasurementBoundCertificateProvider.class).getCertificate();
+    firstInjector.getInstance(MeasurementBoundCertificateReloader.class).reloadCertificate();
 
     // Delete the root cert from S3
     s3TestClient.deleteFile(PUBLIC_BUCKET, bucketProperties.getCertPath());
@@ -303,11 +314,13 @@ public class MbsIntegrationTest {
 
     // Fresh start should regenerate all artifacts
     Injector secondInjector = createTestInjector();
+    secondInjector.getInstance(MeasurementBoundCertificateReloader.class).reloadCertificate();
     MeasurementBoundCertificateProvider secondProvider =
         secondInjector.getInstance(MeasurementBoundCertificateProvider.class);
     MeasurementBoundCertificate regeneratedMbc = secondProvider.getCertificate();
 
     assertNotNull(regeneratedMbc);
+    assertSame(regeneratedMbc, secondProvider.getCertificate());
     assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getCertPath()));
     assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
   }
@@ -315,7 +328,7 @@ public class MbsIntegrationTest {
   @Test
   public void loadOrGenerateCertificate_missingPrivateKeyArtifact_triggersRegeneration() {
     Injector firstInjector = createTestInjector();
-    firstInjector.getInstance(MeasurementBoundCertificateProvider.class).getCertificate();
+    firstInjector.getInstance(MeasurementBoundCertificateReloader.class).reloadCertificate();
 
     // Delete private key artifact while leaving cert intact in public bucket
     s3TestClient.deleteFile(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath());
@@ -324,12 +337,13 @@ public class MbsIntegrationTest {
 
     // Next instance acquires lock, regenerates artifacts, and cleans up lock
     Injector secondInjector = createTestInjector();
+    secondInjector.getInstance(MeasurementBoundCertificateReloader.class).reloadCertificate();
     MeasurementBoundCertificateProvider secondProvider =
         secondInjector.getInstance(MeasurementBoundCertificateProvider.class);
-
     MeasurementBoundCertificate regeneratedMbc = secondProvider.getCertificate();
 
     assertNotNull(regeneratedMbc);
+    assertSame(regeneratedMbc, secondProvider.getCertificate());
     assertTrue(
         s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath()));
     assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
@@ -349,9 +363,14 @@ public class MbsIntegrationTest {
         tasks.add(
             () -> {
               Injector injector = createTestInjector("i-worker-" + threadId);
+              MeasurementBoundCertificateReloader reloader =
+                  injector.getInstance(MeasurementBoundCertificateReloader.class);
               MeasurementBoundCertificateProvider provider =
                   injector.getInstance(MeasurementBoundCertificateProvider.class);
-              return provider.getCertificate();
+              reloader.reloadCertificate();
+              MeasurementBoundCertificate cert = provider.getCertificate();
+              assertNotNull(cert);
+              return cert;
             });
       }
 
@@ -393,16 +412,18 @@ public class MbsIntegrationTest {
     assertTrue(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
 
     Injector injector = createTestInjector();
+    MeasurementBoundCertificateReloader reloader =
+        injector.getInstance(MeasurementBoundCertificateReloader.class);
     MeasurementBoundCertificateProvider provider =
         injector.getInstance(MeasurementBoundCertificateProvider.class);
 
     java.util.concurrent.ExecutorService executor =
         java.util.concurrent.Executors.newSingleThreadExecutor();
     try {
-      java.util.concurrent.Future<MeasurementBoundCertificate> future =
-          executor.submit(provider::getCertificate);
+      java.util.concurrent.Future<?> future =
+          executor.submit((Runnable) reloader::reloadCertificate);
 
-      // Give the provider time to start, encounter the lock, and enter the retry loop
+      // Give the reloader time to start, encounter the lock, and enter the retry loop
       Thread.sleep(600);
       assertFalse(future.isDone());
 
@@ -410,10 +431,11 @@ public class MbsIntegrationTest {
       s3TestClient.deleteFile(PRIVATE_BUCKET, bucketProperties.getLockPath());
       assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
 
-      // Waiting provider should automatically acquire the lock on its next attempt and complete
-      MeasurementBoundCertificate certificate =
-          future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+      // Waiting reloader should automatically acquire the lock on its next attempt and complete
+      future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+      MeasurementBoundCertificate certificate = provider.getCertificate();
       assertNotNull(certificate);
+      assertSame(certificate, provider.getCertificate());
       assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getCertPath()));
       assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
     } finally {
@@ -426,11 +448,15 @@ public class MbsIntegrationTest {
       throws Exception {
     // 1. Normal operation on Certificate A
     Injector runningInjector = createTestInjector("i-running-1", "CN=Initial MBS Root");
+    MeasurementBoundCertificateReloader runningReloader =
+        runningInjector.getInstance(MeasurementBoundCertificateReloader.class);
     MeasurementBoundCertificateProvider runningProvider =
         runningInjector.getInstance(MeasurementBoundCertificateProvider.class);
 
+    runningReloader.reloadCertificate();
     MeasurementBoundCertificate certA = runningProvider.getCertificate();
     assertNotNull(certA);
+    assertSame(certA, runningProvider.getCertificate());
     assertEquals("CN=Initial MBS Root", certA.getCertificate().getSubjectX500Principal().getName());
 
     // Normal operation: verify active signing works with Certificate A's keypair
@@ -453,10 +479,14 @@ public class MbsIntegrationTest {
     s3TestClient.clearBucket(PRIVATE_BUCKET);
 
     Injector rotationInjector = createTestInjector("i-rotator-1", "CN=Rotated MBS Root");
+    MeasurementBoundCertificateReloader rotationReloader =
+        rotationInjector.getInstance(MeasurementBoundCertificateReloader.class);
     MeasurementBoundCertificateProvider rotationProvider =
         rotationInjector.getInstance(MeasurementBoundCertificateProvider.class);
+    rotationReloader.reloadCertificate();
     MeasurementBoundCertificate certB = rotationProvider.getCertificate();
     assertNotNull(certB);
+    assertSame(certB, rotationProvider.getCertificate());
     assertEquals("CN=Rotated MBS Root", certB.getCertificate().getSubjectX500Principal().getName());
     assertNotEquals(
         certA.getCertificate().getSerialNumber(), certB.getCertificate().getSerialNumber());
@@ -467,10 +497,9 @@ public class MbsIntegrationTest {
         runningProvider.getCertificate().getCertificate().getSubjectX500Principal().getName());
     assertSame(certA, runningProvider.getCertificate());
 
-    // 3. Reload is triggered on the running provider
-    MeasurementBoundCertificateReloader reloader =
-        runningInjector.getInstance(MeasurementBoundCertificateReloader.class);
-    MeasurementBoundCertificate reloadedCert = reloader.reloadCertificate();
+    // 3. Reload is triggered on the running instance
+    runningReloader.reloadCertificate();
+    MeasurementBoundCertificate reloadedCert = runningProvider.getCertificate();
 
     // 4. Verify running provider has updated to Certificate B
     assertNotNull(reloadedCert);

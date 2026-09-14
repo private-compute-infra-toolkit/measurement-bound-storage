@@ -117,22 +117,18 @@ public class KmsMeasurementBoundCertificateProvider
   @Override
   public MeasurementBoundCertificate getCertificate() {
     MeasurementBoundCertificate cert = currentCertificate.get();
-    if (cert != null) {
-      return cert;
+    if (cert == null) {
+      throw new IllegalStateException("Measurement-bound certificate has not been initialized yet");
     }
-    synchronized (this) {
-      cert = currentCertificate.get();
-      return (cert != null) ? cert : reloadCertificate();
-    }
+    return cert;
   }
 
   @Override
-  public synchronized MeasurementBoundCertificate reloadCertificate() {
+  public synchronized void reloadCertificate() {
     try {
       MeasurementBoundCertificate reloaded = executeLoadOrGenerateCertificate();
       currentCertificate.set(reloaded);
       metrics.setReloadStatus(SUCCESS);
-      return reloaded;
     } catch (Exception e) {
       metrics.setReloadStatus(FAILURE);
       logger.atSevere().withCause(e).log(

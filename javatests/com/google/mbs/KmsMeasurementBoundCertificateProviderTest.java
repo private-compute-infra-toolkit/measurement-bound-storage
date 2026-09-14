@@ -51,7 +51,6 @@ import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.KmsException;
 import com.google.mbs.domain.KmsGeneratedKey;
 import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.StorageAlreadyLockedException;
 import java.nio.charset.StandardCharsets;
@@ -149,9 +148,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     when(storage.getAttestationDocBytes()).thenReturn(attestationDocBytes);
     when(kmsClient.decrypt(kmsEncryptedDataKey, KMS_KEY_ARN)).thenReturn(plaintextDataKey);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     assertEquals(
         certificate.getSubjectX500Principal(), result.getCertificate().getSubjectX500Principal());
     assertArrayEquals(
@@ -192,9 +193,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     assertNotNull(result.getCertificate());
     assertNotNull(result.getPrivateKey());
     assertEquals("CN=Test CA", result.getCertificate().getSubjectX500Principal().getName());
@@ -256,7 +259,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
               mockCert, keyPair.getPrivate());
         };
 
-    MeasurementBoundCertificateProvider customProvider =
+    KmsMeasurementBoundCertificateProvider customProvider =
         new KmsMeasurementBoundCertificateProvider(
             kmsClient,
             storage,
@@ -281,9 +284,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    customProvider.reloadCertificate();
     MeasurementBoundCertificate result = customProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, customProvider.getCertificate());
     assertEquals("CN=Custom Service", result.getCertificate().getSubjectX500Principal().getName());
     assertEquals("CN=Custom Issuer", result.getCertificate().getIssuerX500Principal().getName());
     assertEquals(notBefore, result.getCertificate().getNotBefore());
@@ -301,7 +306,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
           throw new RuntimeException("Simulated builder failure");
         };
 
-    MeasurementBoundCertificateProvider customProvider =
+    KmsMeasurementBoundCertificateProvider customProvider =
         new KmsMeasurementBoundCertificateProvider(
             kmsClient,
             storage,
@@ -325,7 +330,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         RuntimeException.class,
         () -> {
-          customProvider.getCertificate();
+          customProvider.reloadCertificate();
         });
     verify(mockMetrics).setReloadStatus(FAILURE);
     verify(mockMetrics, never()).recordEvent(any());
@@ -355,7 +360,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
               mockCert, keyPair.getPrivate());
         };
 
-    MeasurementBoundCertificateProvider customProvider =
+    KmsMeasurementBoundCertificateProvider customProvider =
         new KmsMeasurementBoundCertificateProvider(
             kmsClient,
             storage,
@@ -381,7 +386,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> {
-          customProvider.getCertificate();
+          customProvider.reloadCertificate();
         });
     verify(mockMetrics).setReloadStatus(FAILURE);
     verify(mockMetrics, never()).recordEvent(any());
@@ -396,7 +401,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         RuntimeException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
   }
 
@@ -430,7 +435,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         RuntimeException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
 
     verify(mockMetrics).recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
@@ -446,7 +451,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         RuntimeException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
 
     verify(mockMetrics).recordEvent(Metrics.MbsEvent.KMS_OPERATION_FAILED);
@@ -470,9 +475,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     verify(storage).acquireLock();
     verify(storage)
         .putCertBytes(
@@ -488,7 +495,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         RuntimeException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
 
     verify(storage, never()).releaseLock();
@@ -523,9 +530,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     when(storage.getAttestationDocBytes())
         .thenReturn("Attestation doc".getBytes(StandardCharsets.UTF_8));
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     verify(storage).acquireLock();
     verify(storage).releaseLock();
     verify(kmsClient, never()).generateDataKey(any());
@@ -562,9 +571,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     when(storage.getAttestationDocBytes()).thenReturn(attestationDocBytes);
     when(kmsClient.decrypt(kmsEncryptedDataKey, KMS_KEY_ARN)).thenReturn(plaintextDataKey);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     assertEquals("CN=Test CA", result.getCertificate().getSubjectX500Principal().getName());
     // Verify that KMS generateDataKey was NEVER called since this instance lost the lock
     verify(kmsClient, never()).generateDataKey(any());
@@ -595,9 +606,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     // Verified it attempted lock twice, generated keys, wrote artifacts, and released lock
     verify(storage, times(2)).acquireLock();
     verify(storage).releaseLock();
@@ -613,7 +626,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         IllegalStateException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
   }
 
@@ -627,7 +640,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
     assertThrows(
         IllegalStateException.class,
         () -> {
-          certificateProvider.getCertificate();
+          certificateProvider.reloadCertificate();
         });
 
     verify(mockMetrics, times(3)).recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
@@ -652,9 +665,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     verify(mockMetrics, never()).recordEvent(Metrics.MbsEvent.WAITING_FOR_MBS_LOCK);
     verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
@@ -689,9 +704,11 @@ public class KmsMeasurementBoundCertificateProviderTest {
     AttestationToken token = AttestationToken.fromBytes(attestationDoc);
     when(attestationCollector.collectBoundToPubkey(any(), any())).thenReturn(token);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate result = certificateProvider.getCertificate();
 
     assertNotNull(result);
+    assertSame(result, certificateProvider.getCertificate());
     // Attempts 1 and 2 encountered lock contention, emitting WAITING_FOR_MBS_LOCK before succeeding
     // on
     // attempt 3
@@ -723,6 +740,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
         .thenReturn("attestation-1".getBytes(StandardCharsets.UTF_8));
     when(kmsClient.decrypt(kmsKey1, KMS_KEY_ARN)).thenReturn(plaintextDataKey1);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate initial = certificateProvider.getCertificate();
     assertNotNull(initial);
     assertEquals("CN=Test CA 1", initial.getCertificate().getSubjectX500Principal().getName());
@@ -747,7 +765,8 @@ public class KmsMeasurementBoundCertificateProviderTest {
         .thenReturn("attestation-2".getBytes(StandardCharsets.UTF_8));
     when(kmsClient.decrypt(kmsKey2, KMS_KEY_ARN)).thenReturn(plaintextDataKey2);
 
-    MeasurementBoundCertificate reloaded = certificateProvider.reloadCertificate();
+    certificateProvider.reloadCertificate();
+    MeasurementBoundCertificate reloaded = certificateProvider.getCertificate();
     assertNotNull(reloaded);
     assertEquals("CN=Test CA 2", reloaded.getCertificate().getSubjectX500Principal().getName());
     assertEquals(
@@ -779,6 +798,7 @@ public class KmsMeasurementBoundCertificateProviderTest {
         .thenReturn("attestation".getBytes(StandardCharsets.UTF_8));
     when(kmsClient.decrypt(kmsKey, KMS_KEY_ARN)).thenReturn(plaintextDataKey);
 
+    certificateProvider.reloadCertificate();
     MeasurementBoundCertificate initial = certificateProvider.getCertificate();
     assertNotNull(initial);
 
@@ -793,7 +813,14 @@ public class KmsMeasurementBoundCertificateProviderTest {
   }
 
   @Test
-  public void getCertificate_concurrentColdStart_loadsOnlyOnce() throws Exception {
+  public void getCertificate_uninitialized_throwsIllegalStateException() {
+    IllegalStateException ex =
+        assertThrows(IllegalStateException.class, () -> certificateProvider.getCertificate());
+    assertEquals("Measurement-bound certificate has not been initialized yet", ex.getMessage());
+  }
+
+  @Test
+  public void getCertificate_lockFree_concurrentReadsReturnActiveCertificate() throws Exception {
     MbsCertificateFactory.CertSignatureSpec spec =
         new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey =
@@ -815,6 +842,9 @@ public class KmsMeasurementBoundCertificateProviderTest {
         .thenReturn("attestation".getBytes(StandardCharsets.UTF_8));
     when(kmsClient.decrypt(kmsKey, KMS_KEY_ARN)).thenReturn(plaintextDataKey);
 
+    certificateProvider.reloadCertificate();
+    MeasurementBoundCertificate loaded = certificateProvider.getCertificate();
+
     int threadCount = 10;
     java.util.concurrent.ExecutorService executor =
         java.util.concurrent.Executors.newFixedThreadPool(threadCount);
@@ -832,16 +862,62 @@ public class KmsMeasurementBoundCertificateProviderTest {
               }));
     }
 
-    MeasurementBoundCertificate expected = futures.get(0).get();
     for (java.util.concurrent.Future<MeasurementBoundCertificate> future : futures) {
-      assertSame(expected, future.get());
+      assertSame(loaded, future.get());
     }
     executor.shutdown();
 
-    // Verify storage and KMS decrypt were only called once despite 10 concurrent cold-start
-    // requests
+    // Verify storage and KMS decrypt were only called once (during reloadCertificate),
+    // and all concurrent getCertificate() calls were wait-free atomic reads.
     verify(storage, times(1)).getCertBytes();
     verify(kmsClient, times(1)).decrypt(kmsKey, KMS_KEY_ARN);
+  }
+
+  @Test
+  public void reloadCertificate_concurrentCalls_serialized() throws Exception {
+    MbsCertificateFactory.CertSignatureSpec spec =
+        new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
+    MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey =
+        MbsCertificateFactory.createSelfSignedCertificatesFactory(
+                spec,
+                new X500Name("CN=Test CA"),
+                Duration.ofDays(30),
+                Optional.empty(),
+                KeyUsage.keyCertSign)
+            .generate();
+    byte[] plaintextDataKey = generateAesKey();
+    byte[] kmsKey = "kms-key".getBytes(StandardCharsets.UTF_8);
+    byte[] encPrivKey = encrypt(certAndKey.privateKey().getEncoded(), plaintextDataKey);
+
+    when(storage.getCertBytes()).thenReturn(certAndKey.certificate().getEncoded());
+    when(storage.getKmsEncryptedDataKey()).thenReturn(kmsKey);
+    when(storage.getAeadEncryptedPrivateKey()).thenReturn(encPrivKey);
+    when(storage.getAttestationDocBytes())
+        .thenReturn("attestation".getBytes(StandardCharsets.UTF_8));
+    when(kmsClient.decrypt(kmsKey, KMS_KEY_ARN)).thenReturn(plaintextDataKey);
+
+    int threadCount = 5;
+    java.util.concurrent.ExecutorService executor =
+        java.util.concurrent.Executors.newFixedThreadPool(threadCount);
+    java.util.concurrent.CyclicBarrier barrier =
+        new java.util.concurrent.CyclicBarrier(threadCount);
+    java.util.List<java.util.concurrent.Future<MeasurementBoundCertificate>> futures =
+        new java.util.ArrayList<>();
+
+    for (int i = 0; i < threadCount; i++) {
+      futures.add(
+          executor.submit(
+              () -> {
+                barrier.await();
+                certificateProvider.reloadCertificate();
+                return certificateProvider.getCertificate();
+              }));
+    }
+
+    for (java.util.concurrent.Future<MeasurementBoundCertificate> future : futures) {
+      assertNotNull(future.get());
+    }
+    executor.shutdown();
   }
 
   private KeyPair generateKeyPair() throws GeneralSecurityException {

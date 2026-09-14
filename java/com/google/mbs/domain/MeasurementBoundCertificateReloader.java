@@ -28,8 +28,7 @@ public interface MeasurementBoundCertificateReloader {
    * Synchronously reloads or generates the certificate from backing storage, updating the active
    * certificate in place.
    *
-   * @return the newly reloaded active {@link MeasurementBoundCertificate}
    * @throws RuntimeException if loading or generating the certificate fails
    */
-  MeasurementBoundCertificate reloadCertificate();
+  void reloadCertificate();
 }

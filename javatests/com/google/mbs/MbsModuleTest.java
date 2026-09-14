@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -68,12 +69,16 @@ public class MbsModuleTest {
     assertNotNull(reloader);
     assertSame(provider, reloader);
 
+    assertThrows(IllegalStateException.class, provider::getCertificate);
+
+    reloader.reloadCertificate();
     MeasurementBoundCertificate mbc1 = provider.getCertificate();
     assertNotNull(mbc1);
     assertNotNull(mbc1.getCertificate());
     assertNotNull(mbc1.getPrivateKey());
 
-    MeasurementBoundCertificate mbc2 = reloader.reloadCertificate();
+    reloader.reloadCertificate();
+    MeasurementBoundCertificate mbc2 = provider.getCertificate();
     assertNotNull(mbc2);
     assertNotNull(mbc2.getCertificate());
     assertNotNull(mbc2.getPrivateKey());

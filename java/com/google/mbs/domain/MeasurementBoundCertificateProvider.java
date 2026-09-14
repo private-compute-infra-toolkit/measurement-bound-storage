@@ -25,8 +25,10 @@ public interface MeasurementBoundCertificateProvider {
   /**
    * Returns the current active measurement-bound certificate, private key, and attestation token.
    *
-   * <p>Thread-safe and non-blocking in steady-state once initialized. If called before initial
-   * load, this method blocks to load or generate the certificate from backing storage.
+   * <p>This method is lock-free and non-blocking. It returns the current in-memory active
+   * certificate.
+   *
+   * @throws IllegalStateException if the certificate has not been loaded or initialized yet.
    */
   MeasurementBoundCertificate getCertificate();
 }
