@@ -16,6 +16,8 @@
 
 package com.google.mbs.domain;
 
+import org.jspecify.annotations.NonNull;
+
 /** Storage port for storing and retrieving MBS certificate, key, and attestation artifacts. */
 public interface KeyBackupStorage {
 
@@ -23,25 +25,39 @@ public interface KeyBackupStorage {
    * Acquires an exclusive lock on backup storage for certificate generation.
    *
    * @throws StorageAlreadyLockedException if the lock is already held by another instance
+   * @throws KeyBackupAccessFailedException if the lock could not be written
    */
-  void acquireLock() throws StorageAlreadyLockedException;
+  void acquireLock() throws StorageAlreadyLockedException, KeyBackupAccessFailedException;
 
-  /** Releases the certificate generation lock upon successful artifact creation. */
-  void releaseLock();
+  /**
+   * Releases the certificate generation lock upon successful artifact creation.
+   *
+   * @throws KeyBackupAccessFailedException if the lock could not be removed
+   */
+  void releaseLock() throws KeyBackupAccessFailedException;
 
-  byte[] getCertBytes() throws KeyBackupNotFoundException;
+  /**
+   * Retrieves the complete key backup.
+   *
+   * @throws KeyBackupNotFoundException if no artifact exists at all
+   * @throws KeyBackupPartiallyWrittenException if artifacts are missing and the certificate is one
+   *     of them, proving the backup was never completed
+   * @throws KeyBackupIncompleteException if a completed backup is missing artifacts
+   * @throws KeyBackupAccessFailedException if the artifacts could not be read
+   */
+  @NonNull KeyBackup getKeyBackup()
+      throws KeyBackupNotFoundException,
+          KeyBackupPartiallyWrittenException,
+          KeyBackupIncompleteException,
+          KeyBackupAccessFailedException;
 
-  byte[] getKmsEncryptedDataKey() throws KeyBackupNotFoundException;
-
-  byte[] getAeadEncryptedPrivateKey() throws KeyBackupNotFoundException;
-
-  byte[] getAttestationDocBytes() throws KeyBackupNotFoundException;
-
-  void putCertBytes(byte[] content);
-
-  void putKmsEncryptedDataKey(byte[] content);
-
-  void putAeadEncryptedPrivateKey(byte[] content);
-
-  void putAttestationDocBytes(byte[] content);
+  /**
+   * Stores the complete key backup.
+   *
+   * <p>Implementations must write the certificate last, so that it acts as a completion sentinel
+   * for concurrent readers.
+   *
+   * @throws KeyBackupAccessFailedException if any artifact could not be written
+   */
+  void putKeyBackup(KeyBackup keyBackup) throws KeyBackupAccessFailedException;
 }

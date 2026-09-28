@@ -16,14 +16,17 @@
 
 package com.google.mbs.domain;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+/**
+ * Thrown when the backup storage could not be reached, e.g. a transport, permission or availability
+ * failure. Says nothing about whether a backup exists or what it contains.
+ */
+public class KeyBackupAccessFailedException extends KeyBackupStorageException {
 
-  public KeyBackupNotFoundException(String message) {
+  public KeyBackupAccessFailedException(String message) {
     super(message);
   }
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
+  public KeyBackupAccessFailedException(String message, Throwable cause) {
     super(message, cause);
   }
 }

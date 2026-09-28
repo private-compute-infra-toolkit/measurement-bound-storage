@@ -27,9 +27,14 @@ java_library(
     srcs = [
         "AttestationCollector.java",
         "AttestationToken.java",
+        "BundleCorruptedException.java",
         "CertificateMonitor.java",
+        "KeyBackup.java",
+        "KeyBackupAccessFailedException.java",
         "KeyBackupBucketProperties.java",
+        "KeyBackupIncompleteException.java",
         "KeyBackupNotFoundException.java",
+        "KeyBackupPartiallyWrittenException.java",
         "KeyBackupStorage.java",
         "KeyBackupStorageException.java",
         "KmsClientInterface.java",
@@ -40,9 +45,11 @@ java_library(
         "MeasurementBoundCertificateReloader.java",
         "Metrics.java",
         "StorageAlreadyLockedException.java",
+        "TrustPackage.java",
     ],
     plugins = [":auto_value_plugin"],
     deps = [
         "@maven//:com_google_auto_value_auto_value_annotations",
+        "@maven//:org_jspecify_jspecify",
     ],
 )

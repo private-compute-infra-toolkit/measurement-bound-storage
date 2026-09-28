@@ -28,7 +28,6 @@ java_library(
         "KeyBackupBucketPropertiesFactory.java",
         "KmsMeasurementBoundCertificateProvider.java",
         "MbsCertificateFactory.java",
-        "NoOpMetrics.java",
     ],
     plugins = [":auto_value_plugin"],
     exports = [
@@ -51,21 +50,9 @@ java_library(
     ],
 )
 
-java_library(
+alias(
     name = "dummy_cert_provider",
-    srcs = [
-        "DummyMbsModule.java",
-        "DummyMeasurementBoundCertificateProvider.java",
-    ],
-    deps = [
-        ":certmanagement",
-        "//java/com/google/mbs/adapters",
-        "//java/com/google/mbs/domain",
-        "@maven//:com_google_inject_guice",
-        "@maven//:jakarta_inject_jakarta_inject_api",
-        "@maven//:org_bouncycastle_bcpkix_jdk18on",
-        "@maven//:org_bouncycastle_bcprov_jdk18on",
-    ],
+    actual = "//java/com/google/mbs/dummy:dummy_cert_provider",
 )
 
 java_library(

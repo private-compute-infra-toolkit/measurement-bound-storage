@@ -16,14 +16,17 @@
 
 package com.google.mbs.domain;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+/**
+ * Thrown when a complete key backup was retrieved but its contents cannot be used: an artifact does
+ * not parse, cannot be decrypted, or the private key does not belong to the certificate.
+ */
+public class BundleCorruptedException extends Exception {
 
-  public KeyBackupNotFoundException(String message) {
+  public BundleCorruptedException(String message) {
     super(message);
   }
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
+  public BundleCorruptedException(String message, Throwable cause) {
     super(message, cause);
   }
 }

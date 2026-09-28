@@ -14,16 +14,19 @@
  * limitations under the License.
  */
 
-package com.google.mbs.domain;
+package com.google.mbs.dummy;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+import com.google.mbs.domain.Metrics;
 
-  public KeyBackupNotFoundException(String message) {
-    super(message);
+/** A no-op implementation of {@link Metrics}. */
+public final class NoOpMetrics implements Metrics {
+  @Override
+  public void recordEvent(MbsEvent event) {
+    // No-op
   }
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
-    super(message, cause);
+  @Override
+  public void setReloadStatus(ReloadStatus status) {
+    // No-op
   }
 }

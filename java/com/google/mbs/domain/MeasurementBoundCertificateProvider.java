@@ -17,18 +17,19 @@
 package com.google.mbs.domain;
 
 /**
- * Thread-safe provider for the active {@link MeasurementBoundCertificate}. Enforces atomic
- * retrieval of matching root keys and certificates.
+ * Thread-safe provider for active {@link TrustPackage}. Enforces atomic retrieval of matching root
+ * keys, certificates, and cross-certificates.
  */
 public interface MeasurementBoundCertificateProvider {
 
   /**
-   * Returns the current active measurement-bound certificate, private key, and attestation token.
+   * Returns the current active trust package containing measurement-bound certificates and
+   * cross-certificates.
    *
-   * <p>This method is lock-free and non-blocking. It returns the current in-memory active
-   * certificate.
+   * <p>This method is lock-free and non-blocking. It returns the current in-memory active trust
+   * package.
    *
-   * @throws IllegalStateException if the certificate has not been loaded or initialized yet.
+   * @throws IllegalStateException if the certificates have not been loaded or initialized yet.
    */
-  MeasurementBoundCertificate getCertificate();
+  TrustPackage getActiveTrustPackage();
 }

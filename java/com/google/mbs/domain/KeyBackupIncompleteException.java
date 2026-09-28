@@ -16,14 +16,20 @@
 
 package com.google.mbs.domain;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+/**
+ * Thrown when private key, data key, or attestation doc is missing while certificate is present in
+ * the bucket.
+ *
+ * <p>When backup is written, the certificate is written last as a sentinel object. Object different
+ * than a certificate missing from the backup is a non-transient error.
+ */
+public class KeyBackupIncompleteException extends KeyBackupStorageException {
 
-  public KeyBackupNotFoundException(String message) {
+  public KeyBackupIncompleteException(String message) {
     super(message);
   }
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
+  public KeyBackupIncompleteException(String message, Throwable cause) {
     super(message, cause);
   }
 }

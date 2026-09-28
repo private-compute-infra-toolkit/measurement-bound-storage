@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.dummy;
 
 import com.google.inject.AbstractModule;
 import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;

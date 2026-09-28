@@ -16,8 +16,8 @@
 
 package com.google.mbs.domain;
 
-/** Exception thrown when an error occurs while interacting with MBS backup storage. */
-public class KeyBackupStorageException extends RuntimeException {
+/** Base type for every failure mode of an MBS key backup. */
+public class KeyBackupStorageException extends Exception {
 
   public KeyBackupStorageException(String message) {
     super(message);

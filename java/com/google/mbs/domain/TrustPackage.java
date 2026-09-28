@@ -16,14 +16,21 @@
 
 package com.google.mbs.domain;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.Objects;
 
-  public KeyBackupNotFoundException(String message) {
-    super(message);
-  }
+/**
+ * Container holding lists of active measurement-bound bundles and cross-certificates.
+ *
+ * @param bundles list of active measurement-bound bundles
+ * @param crossSignedCertificates list of cross-signed X.509 certificates
+ */
+public record TrustPackage(
+    List<MeasurementBoundCertificate> bundles, List<X509Certificate> crossSignedCertificates) {
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
-    super(message, cause);
+  public TrustPackage {
+    Objects.requireNonNull(bundles, "bundles must not be null");
+    Objects.requireNonNull(crossSignedCertificates, "crossSignedCertificates must not be null");
   }
 }

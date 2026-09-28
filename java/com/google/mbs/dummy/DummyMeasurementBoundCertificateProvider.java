@@ -14,18 +14,20 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.dummy;
 
 import com.google.mbs.domain.AttestationToken;
 import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.TrustPackage;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -44,12 +46,12 @@ public class DummyMeasurementBoundCertificateProvider
   private volatile MeasurementBoundCertificate mbc = null;
 
   @Override
-  public MeasurementBoundCertificate getCertificate() {
+  public TrustPackage getActiveTrustPackage() {
     MeasurementBoundCertificate cert = mbc;
     if (cert == null) {
       throw new IllegalStateException("Measurement-bound certificate has not been initialized yet");
     }
-    return cert;
+    return new TrustPackage(List.of(cert), List.of());
   }
 
   @Override

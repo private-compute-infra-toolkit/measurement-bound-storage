@@ -25,6 +25,7 @@ public interface Metrics {
     S3_FETCH_FAILED,
     S3_WRITE_FAILED,
     KMS_OPERATION_FAILED,
+    STORED_BACKUP_CORRUPTED,
   }
 
   /** Records the occurrence of an MBS event. */

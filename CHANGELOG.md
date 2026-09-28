@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.10.0 (2026-09-28)
+
+
+### Features
+
+* Do not regenerate root certificate when MBS state is corrupted
+
+
+### Bug Fixes
+
+* Speed up establishing consistency on new certificates
+
+
+### Documentation
+
+* Add AGENTS.md with hexagonal architecture guidelines
+
 ## 0.9.0 (2026-09-14)
 
 

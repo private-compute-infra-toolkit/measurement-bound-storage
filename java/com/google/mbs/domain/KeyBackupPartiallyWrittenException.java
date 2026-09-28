@@ -16,14 +16,19 @@
 
 package com.google.mbs.domain;
 
-/** Thrown when the backup storage is pristine: not a single artifact exists. */
-public class KeyBackupNotFoundException extends KeyBackupStorageException {
+/**
+ * Thrown when the certificate is missing in the backup.
+ *
+ * <p>When backup is written, the certificate is written last as a sentinel object. Missing
+ * certificate may be a transient issue that may recovered after a retry.
+ */
+public class KeyBackupPartiallyWrittenException extends KeyBackupStorageException {
 
-  public KeyBackupNotFoundException(String message) {
+  public KeyBackupPartiallyWrittenException(String message) {
     super(message);
   }
 
-  public KeyBackupNotFoundException(String message, Throwable cause) {
+  public KeyBackupPartiallyWrittenException(String message, Throwable cause) {
     super(message, cause);
   }
 }

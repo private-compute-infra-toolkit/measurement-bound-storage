@@ -42,6 +42,9 @@ import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.mbs.domain.MeasurementBoundCertificateReloader;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.TrustPackage;
+import com.google.mbs.dummy.DummyMbsModule;
+import com.google.mbs.dummy.DummyMeasurementBoundCertificateProvider;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
@@ -69,17 +72,23 @@ public class MbsModuleTest {
     assertNotNull(reloader);
     assertSame(provider, reloader);
 
-    assertThrows(IllegalStateException.class, provider::getCertificate);
+    assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
     reloader.reloadCertificate();
-    MeasurementBoundCertificate mbc1 = provider.getCertificate();
-    assertNotNull(mbc1);
+    TrustPackage package1 = provider.getActiveTrustPackage();
+    assertNotNull(package1);
+    assertEquals(1, package1.bundles().size());
+    assertTrue(package1.crossSignedCertificates().isEmpty());
+    MeasurementBoundCertificate mbc1 = package1.bundles().get(0);
     assertNotNull(mbc1.getCertificate());
     assertNotNull(mbc1.getPrivateKey());
 
     reloader.reloadCertificate();
-    MeasurementBoundCertificate mbc2 = provider.getCertificate();
-    assertNotNull(mbc2);
+    TrustPackage package2 = provider.getActiveTrustPackage();
+    assertNotNull(package2);
+    assertEquals(1, package2.bundles().size());
+    assertTrue(package2.crossSignedCertificates().isEmpty());
+    MeasurementBoundCertificate mbc2 = package2.bundles().get(0);
     assertNotNull(mbc2.getCertificate());
     assertNotNull(mbc2.getPrivateKey());
     assertNotEquals(

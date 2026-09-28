@@ -37,7 +37,7 @@ public class MeasurementBoundCertificateMonitor extends AbstractScheduledService
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  private static final Duration RELOAD_INTERVAL = Duration.ofMinutes(10);
+  private static final Duration RELOAD_INTERVAL = Duration.ofMinutes(2);
 
   private final MeasurementBoundCertificateReloader reloader;
   private final Metrics metrics;
