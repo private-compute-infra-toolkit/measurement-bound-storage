@@ -18,25 +18,40 @@ package com.google.mbs.domain;
 
 /** Port for reporting metrics from MBS library. */
 public interface Metrics {
-  /** Events that can be reported by MBS. */
   enum MbsEvent {
-    SUCCESS,
-    WAITING_FOR_MBS_LOCK,
-    S3_FETCH_FAILED,
-    S3_WRITE_FAILED,
-    KMS_OPERATION_FAILED,
-    STORED_BACKUP_CORRUPTED,
-  }
-
-  /** Records the occurrence of an MBS event. */
-  void recordEvent(MbsEvent event);
-
-  /** Status of certificate reloading. */
-  enum ReloadStatus {
     SUCCESS,
     FAILURE,
   }
 
-  /** Sets the status of certificate reloading. */
-  void setReloadStatus(ReloadStatus status);
+  void recordEvent(MbsEvent event);
+
+  enum GenerationEvent {
+    SUCCESS,
+    WAITING_FOR_MBS_LOCK,
+    S3_OPERATION_FAILED,
+    KMS_OPERATION_FAILED,
+    GENERAL_FAILURE,
+  }
+
+  void recordGenerationEvent(GenerationEvent event);
+
+  enum LoadEvent {
+    SUCCESS,
+    KEY_BACKUP_NOT_FOUND,
+    S3_OPERATION_FAILED,
+    KMS_OPERATION_FAILED,
+    STORED_BACKUP_CORRUPTED,
+    GENERAL_FAILURE,
+  }
+
+  void recordLoadEvent(LoadEvent event);
+
+  enum ConfigEvent {
+    SUCCESS,
+    COULD_NOT_FETCH_CONFIGURATION_FILE,
+    INVALID_CONFIGURATION_FILE,
+    GENERAL_FAILURE,
+  }
+
+  void recordConfigEvent(ConfigEvent event);
 }

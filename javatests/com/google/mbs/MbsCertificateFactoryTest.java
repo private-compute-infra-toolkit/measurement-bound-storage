@@ -20,11 +20,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.ValidityPeriod;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.Security;
 import java.security.cert.X509Certificate;
-import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -50,6 +52,13 @@ public class MbsCertificateFactoryTest {
     }
   }
 
+  private static SelfSignedCertificate defaultParams() {
+    return new SelfSignedCertificate(
+        0,
+        new ValidityPeriod(
+            Instant.parse("1930-01-01T00:00:00Z"), Instant.parse("1930-02-01T00:00:00Z")));
+  }
+
   private static KeyUsage getKeyUsageFromCert(X509Certificate cert) {
     byte[] extValue = cert.getExtensionValue(Extension.keyUsage.getId());
     if (extValue == null) {
@@ -62,18 +71,20 @@ public class MbsCertificateFactoryTest {
   @Test
   public void generateSelfSigned_createsValidLeafCert() throws Exception {
     String subjectName = "CN=Test Service";
-    Duration validity = Duration.ofDays(30);
     int expectedKeyUsageMask = KeyUsage.digitalSignature;
     MbsCertificateFactory.CertSignatureSpec spec =
         new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     MbsCertificateFactory factory =
         MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec, new X500Name(subjectName), validity, Optional.empty(), expectedKeyUsageMask);
-    X509Certificate cert = factory.generate().certificate();
+            spec, new X500Name(subjectName), Optional.empty(), expectedKeyUsageMask);
+    SelfSignedCertificate params = defaultParams();
+    X509Certificate cert = factory.generate(params).certificate();
 
     assertNotNull(cert);
     assertEquals("CN=Test Service", cert.getSubjectX500Principal().getName());
     assertEquals("CN=Test Service", cert.getIssuerX500Principal().getName());
+    assertEquals(params.validityPeriod().notBefore(), cert.getNotBefore().toInstant());
+    assertEquals(params.validityPeriod().notAfter(), cert.getNotAfter().toInstant());
     cert.verify(cert.getPublicKey());
     assertEquals(-1, cert.getBasicConstraints());
     assertEquals(
@@ -95,12 +106,8 @@ public class MbsCertificateFactoryTest {
     int expectedKeyUsageMask = KeyUsage.keyCertSign | KeyUsage.nonRepudiation;
     MbsCertificateFactory factory =
         MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec,
-            new X500Name("CN=Test CA"),
-            Duration.ofDays(30),
-            Optional.empty(),
-            expectedKeyUsageMask);
-    X509Certificate cert = factory.generate().certificate();
+            spec, new X500Name("CN=Test CA"), Optional.empty(), expectedKeyUsageMask);
+    X509Certificate cert = factory.generate(defaultParams()).certificate();
 
     assertNotNull(cert);
     assertEquals(Integer.MAX_VALUE, cert.getBasicConstraints());
@@ -127,12 +134,8 @@ public class MbsCertificateFactoryTest {
         new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     MbsCertificateFactory factory =
         MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec,
-            new X500Name("CN=Test"),
-            Duration.ofDays(30),
-            Optional.of(sans),
-            KeyUsage.digitalSignature);
-    X509Certificate cert = factory.generate().certificate();
+            spec, new X500Name("CN=Test"), Optional.of(sans), KeyUsage.digitalSignature);
+    X509Certificate cert = factory.generate(defaultParams()).certificate();
 
     assertNotNull(cert);
     var subjectAlternativeNames = cert.getSubjectAlternativeNames();

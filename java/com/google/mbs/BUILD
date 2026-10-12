@@ -26,6 +26,7 @@ java_library(
     name = "certmanagement",
     srcs = [
         "KeyBackupBucketPropertiesFactory.java",
+        "KmsMeasurementBoundCertificateGenerator.java",
         "KmsMeasurementBoundCertificateProvider.java",
         "MbsCertificateFactory.java",
     ],

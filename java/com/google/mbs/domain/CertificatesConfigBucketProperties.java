@@ -16,19 +16,20 @@
 
 package com.google.mbs.domain;
 
-/**
- * Interface for reloading the measurement-bound certificate from backing storage.
- *
- * <p>Separates control-plane refresh operations from the read-only data plane exposed by {@link
- * MeasurementBoundCertificateProvider}.
- */
-public interface MeasurementBoundCertificateReloader {
+import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 
-  /**
-   * Synchronously reloads or generates the certificate from backing storage, updating the active
-   * certificate in place.
-   *
-   * @throws RuntimeException if loading or generating the certificate fails
-   */
-  void reloadCertificate();
+/**
+ * Configuration properties for the certificates configuration bucket.
+ *
+ * @param bucketName Name of the bucket hosting the rotations configuration.
+ * @param configFileName File key / name of the rotations textproto within the bucket.
+ */
+public record CertificatesConfigBucketProperties(
+    @NonNull String bucketName, @NonNull String configFileName) {
+
+  public CertificatesConfigBucketProperties {
+    Objects.requireNonNull(bucketName, "bucketName must not be null");
+    Objects.requireNonNull(configFileName, "configFileName must not be null");
+  }
 }

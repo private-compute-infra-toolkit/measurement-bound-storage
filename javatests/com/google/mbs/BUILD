@@ -17,6 +17,22 @@ load("@rules_java//java:defs.bzl", "java_test")
 package(default_visibility = ["//visibility:public"])
 
 java_test(
+    name = "KmsMeasurementBoundCertificateGeneratorTest",
+    size = "small",
+    srcs = ["KmsMeasurementBoundCertificateGeneratorTest.java"],
+    deps = [
+        "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:com_google_guava_guava",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
     name = "KmsMeasurementBoundCertificateProviderTest",
     size = "small",
     srcs = ["KmsMeasurementBoundCertificateProviderTest.java"],
@@ -48,6 +64,7 @@ java_test(
     srcs = ["MbsCertificateFactoryTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs/domain",
         "@maven//:junit_junit",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
@@ -85,8 +102,8 @@ java_test(
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs:module",
+        "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
-        "//java/com/google/mbs/dummy",
         "//javatests/com/google/mbs/testing",
         "@maven//:com_google_inject_extensions_guice_testlib",
         "@maven//:com_google_inject_guice",
@@ -112,5 +129,28 @@ java_test(
         "//java/com/google/mbs/domain",
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "BackupHandleTest",
+    size = "small",
+    srcs = ["BackupHandleTest.java"],
+    deps = [
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "CertificatesConfigTest",
+    size = "small",
+    srcs = ["CertificatesConfigTest.java"],
+    deps = [
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
     ],
 )

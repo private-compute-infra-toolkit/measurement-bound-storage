@@ -16,8 +16,35 @@
 
 package com.google.mbs.domain;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 public record KeyBackup(
     byte[] certBytes,
     byte[] kmsEncryptedDataKey,
     byte[] aeadEncryptedPrivateKey,
-    byte[] attestationDocBytes) {}
+    byte[] attestationDocBytes) {
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof KeyBackup that)) {
+      return false;
+    }
+    return Arrays.equals(certBytes, that.certBytes)
+        && Arrays.equals(kmsEncryptedDataKey, that.kmsEncryptedDataKey)
+        && Arrays.equals(aeadEncryptedPrivateKey, that.aeadEncryptedPrivateKey)
+        && Arrays.equals(attestationDocBytes, that.attestationDocBytes);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(
+        Arrays.hashCode(certBytes),
+        Arrays.hashCode(kmsEncryptedDataKey),
+        Arrays.hashCode(aeadEncryptedPrivateKey),
+        Arrays.hashCode(attestationDocBytes));
+  }
+}

@@ -28,15 +28,14 @@ import static org.junit.Assert.assertTrue;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.adapters.S3BackupPaths;
 import com.google.mbs.domain.AttestationCollector;
-import com.google.mbs.domain.KeyBackupBucketProperties;
 import com.google.mbs.domain.KmsClientInterface;
-import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.MeasurementBoundBundle;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.TrustPackage;
-import com.google.mbs.dummy.NoOpMetrics;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
@@ -51,6 +50,7 @@ import java.security.Signature;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -78,6 +78,23 @@ public class MbsIntegrationTest {
   private static final byte[] TEST_USER_DATA =
       "mbs-test-user-data".getBytes(StandardCharsets.UTF_8);
 
+  private static final Instant DEFAULT_CONFIG_NOT_BEFORE = Instant.ofEpochSecond(1700000000);
+  private static final Instant DEFAULT_CONFIG_NOT_AFTER = Instant.ofEpochSecond(1730000000);
+
+  private static final String DEFAULT_CONFIG_TEXTPROTO =
+      "self_signed_certificates {\n"
+          + "  key: 0\n"
+          + "  value {\n"
+          + "    epoch_id: 0\n"
+          + "    validity_period {\n"
+          + "      not_before { seconds: 1700000000 nanos: 0 }\n"
+          + "      not_after { seconds: 1730000000 nanos: 0 }\n"
+          + "    }\n"
+          + "  }\n"
+          + "}\n"
+          + "active_self_signed_certificate_ids: 0\n"
+          + "acceptable_self_signed_certificate_ids: 0\n";
+
   private static final LocalStackContainer localstack =
       new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.14.0"))
           .withServices(LocalStackContainer.Service.S3)
@@ -89,7 +106,7 @@ public class MbsIntegrationTest {
 
   private FakeKmsClient fakeKmsClient;
   private FakeAttestationCollector fakeAttestationCollector;
-  private KeyBackupBucketProperties bucketProperties;
+  private FakeMetrics fakeMetrics;
 
   @BeforeClass
   public static void setUpClass() {
@@ -162,21 +179,23 @@ public class MbsIntegrationTest {
   public void setUp() {
     fakeKmsClient = new FakeKmsClient();
     fakeAttestationCollector = new FakeAttestationCollector();
-    bucketProperties = new KeyBackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
+    fakeMetrics = new FakeMetrics();
 
     s3TestClient.createBucket(PUBLIC_BUCKET);
     s3TestClient.createBucket(PRIVATE_BUCKET);
     s3TestClient.clearBucket(PUBLIC_BUCKET);
     s3TestClient.clearBucket(PRIVATE_BUCKET);
+    s3TestClient.putFile(
+        PUBLIC_BUCKET, S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH, DEFAULT_CONFIG_TEXTPROTO);
 
     // Verify test tooling cleared the buckets so tests start from a clean state.
-    assertFalse(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getCertPath()));
-    assertFalse(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getAttestationDocPath()));
+    assertFalse(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
+    assertFalse(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getAttestationDocPath(0)));
     assertFalse(
-        s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getKmsEncryptedDataKeyPath()));
+        s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(0)));
     assertFalse(
-        s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath()));
-    assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
+        s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getAesEncryptedPrivateKeyPath(0)));
+    assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getLockPath()));
   }
 
   private Injector createTestInjector() {
@@ -192,11 +211,7 @@ public class MbsIntegrationTest {
         new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     MbsCertificateFactory certFactory =
         MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec,
-            new X500Name(commonName),
-            Duration.ofDays(30),
-            Optional.empty(),
-            KeyUsage.keyCertSign);
+            spec, new X500Name(commonName), Optional.empty(), KeyUsage.keyCertSign);
 
     return Guice.createInjector(
         new MbsCoreModule(),
@@ -206,7 +221,7 @@ public class MbsIntegrationTest {
             bind(KmsClientInterface.class).toInstance(fakeKmsClient);
             bind(AttestationCollector.class).toInstance(fakeAttestationCollector);
             bind(S3Client.class).toInstance(s3Client);
-            bind(Metrics.class).to(NoOpMetrics.class);
+            bind(Metrics.class).toInstance(fakeMetrics);
             bind(String.class).annotatedWith(PublicBackupBucket.class).toInstance(PUBLIC_BUCKET);
             bind(String.class).annotatedWith(PrivateBackupBucket.class).toInstance(PRIVATE_BUCKET);
             bind(String.class).annotatedWith(KmsKeyArn.class).toInstance(KMS_KEY_ARN);
@@ -217,8 +232,11 @@ public class MbsIntegrationTest {
         });
   }
 
-  private static MeasurementBoundCertificate activeCertificate(
-      MeasurementBoundCertificateProvider provider) {
+  private static void runMonitorIteration(Injector injector) {
+    injector.getInstance(MeasurementBoundCertificateMonitor.class).runOneIteration();
+  }
+
+  private static MeasurementBoundBundle activeCertificate(TrustPackageProvider provider) {
     TrustPackage trustPackage = provider.getActiveTrustPackage();
     assertEquals(1, trustPackage.bundles().size());
     assertTrue(trustPackage.crossSignedCertificates().isEmpty());
@@ -226,72 +244,67 @@ public class MbsIntegrationTest {
   }
 
   @Test
-  public void loadOrGenerateCertificate_emptyStorage_createsAndStoresCertificate()
-      throws Exception {
+  public void runOneIteration_emptyStorage_createsAndStoresCertificate() throws Exception {
     Injector injector = createTestInjector();
-    MeasurementBoundCertificateProvider provider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
-    MeasurementBoundCertificateReloader reloader =
-        injector.getInstance(MeasurementBoundCertificateReloader.class);
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
 
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
-    reloader.reloadCertificate();
+    runMonitorIteration(injector);
 
-    MeasurementBoundCertificate mbc = activeCertificate(provider);
+    MeasurementBoundBundle mbc = activeCertificate(provider);
     assertNotNull(mbc);
     assertNotNull(mbc.getCertificate());
     assertNotNull(mbc.getPrivateKey());
     assertNotNull(mbc.getAttestationToken());
     assertEquals("CN=Test MBS Root", mbc.getCertificate().getSubjectX500Principal().getName());
+    assertEquals(DEFAULT_CONFIG_NOT_BEFORE, mbc.getCertificate().getNotBefore().toInstant());
+    assertEquals(DEFAULT_CONFIG_NOT_AFTER, mbc.getCertificate().getNotAfter().toInstant());
 
     // Verify artifacts are stored in S3
-    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getCertPath()));
-    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, bucketProperties.getAttestationDocPath()));
+    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
+    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getAttestationDocPath(0)));
     assertTrue(
-        s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getKmsEncryptedDataKeyPath()));
+        s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(0)));
     assertTrue(
-        s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath()));
+        s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getAesEncryptedPrivateKeyPath(0)));
     // Verify lock file was cleanly released upon successful generation
-    assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
+    assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getLockPath()));
 
     // Verify stored certificate matches returned certificate
-    byte[] storedCertBytes = s3TestClient.getFile(PUBLIC_BUCKET, bucketProperties.getCertPath());
+    byte[] storedCertBytes = s3TestClient.getFile(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0));
     CertificateFactory cf = CertificateFactory.getInstance("X.509");
     X509Certificate storedCert =
         (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(storedCertBytes));
     assertEquals(mbc.getCertificate().getPublicKey(), storedCert.getPublicKey());
+    assertEquals(DEFAULT_CONFIG_NOT_BEFORE, storedCert.getNotBefore().toInstant());
+    assertEquals(DEFAULT_CONFIG_NOT_AFTER, storedCert.getNotAfter().toInstant());
 
-    // Verify root cert and key consistency provided by MeasurementBoundCertificateProvider
+    // Verify root cert and key consistency provided by TrustPackageProvider
     assertEquals(mbc.getCertificate(), activeCertificate(provider).getCertificate());
     assertEquals(mbc.getPrivateKey(), activeCertificate(provider).getPrivateKey());
   }
 
   @Test
-  public void loadOrGenerateCertificate_existingStorage_loadsStoredCertificate() throws Exception {
+  public void runOneIteration_existingStorage_loadsStoredCertificate() throws Exception {
     // Generate initial certificate and artifacts in S3
     Injector firstInjector = createTestInjector();
-    MeasurementBoundCertificateReloader firstReloader =
-        firstInjector.getInstance(MeasurementBoundCertificateReloader.class);
-    firstReloader.reloadCertificate();
-    MeasurementBoundCertificate initialMbc =
-        activeCertificate(firstInjector.getInstance(MeasurementBoundCertificateProvider.class));
+    runMonitorIteration(firstInjector);
+    MeasurementBoundBundle initialMbc =
+        activeCertificate(firstInjector.getInstance(TrustPackageProvider.class));
 
-    byte[] initialCertBytes = s3TestClient.getFile(PUBLIC_BUCKET, bucketProperties.getCertPath());
+    byte[] initialCertBytes = s3TestClient.getFile(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0));
     byte[] initialKmsKeyBytes =
-        s3TestClient.getFile(PRIVATE_BUCKET, bucketProperties.getKmsEncryptedDataKeyPath());
+        s3TestClient.getFile(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(0));
     byte[] initialAesKeyBytes =
-        s3TestClient.getFile(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath());
+        s3TestClient.getFile(PRIVATE_BUCKET, S3BackupPaths.getAesEncryptedPrivateKeyPath(0));
 
     // Create a second injector simulating a fresh enclave start
     Injector secondInjector = createTestInjector();
-    MeasurementBoundCertificateReloader secondReloader =
-        secondInjector.getInstance(MeasurementBoundCertificateReloader.class);
-    MeasurementBoundCertificateProvider secondProvider =
-        secondInjector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider secondProvider = secondInjector.getInstance(TrustPackageProvider.class);
 
-    secondReloader.reloadCertificate();
-    MeasurementBoundCertificate loadedMbc = activeCertificate(secondProvider);
+    runMonitorIteration(secondInjector);
+    MeasurementBoundBundle loadedMbc = activeCertificate(secondProvider);
 
     assertNotNull(loadedMbc);
     assertEquals(
@@ -304,69 +317,87 @@ public class MbsIntegrationTest {
 
     // Verify S3 files were loaded and not overwritten
     assertArrayEquals(
-        initialCertBytes, s3TestClient.getFile(PUBLIC_BUCKET, bucketProperties.getCertPath()));
+        initialCertBytes, s3TestClient.getFile(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
     assertArrayEquals(
         initialKmsKeyBytes,
-        s3TestClient.getFile(PRIVATE_BUCKET, bucketProperties.getKmsEncryptedDataKeyPath()));
+        s3TestClient.getFile(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(0)));
     assertArrayEquals(
         initialAesKeyBytes,
-        s3TestClient.getFile(PRIVATE_BUCKET, bucketProperties.getAesEncryptedPrivateKeyPath()));
+        s3TestClient.getFile(PRIVATE_BUCKET, S3BackupPaths.getAesEncryptedPrivateKeyPath(0)));
   }
 
   @Test
-  public void loadOrGenerateCertificate_corruptedStorage_rejectsAndLeavesCertEmpty()
-      throws Exception {
+  public void runOneIteration_corruptedStorage_rejectsAndLeavesCertEmpty() {
     s3TestClient.putFile(
-        PRIVATE_BUCKET,
-        bucketProperties.getKmsEncryptedDataKeyPath(),
+        PUBLIC_BUCKET,
+        S3BackupPaths.getRootCertPath(0),
         "incomplete set of MBS backup objects".getBytes(StandardCharsets.UTF_8));
     Injector injector = createTestInjector();
-    MeasurementBoundCertificateReloader reloader =
-        injector.getInstance(MeasurementBoundCertificateReloader.class);
-    MeasurementBoundCertificateProvider provider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
-    assertThrows(RuntimeException.class, reloader::reloadCertificate);
+    runMonitorIteration(injector);
+    assertEquals(Metrics.ConfigEvent.SUCCESS, fakeMetrics.lastConfigEvent);
+    assertEquals(Metrics.GenerationEvent.SUCCESS, fakeMetrics.lastGenerationEvent);
+    assertEquals(Metrics.LoadEvent.STORED_BACKUP_CORRUPTED, fakeMetrics.lastLoadEvent);
+    assertEquals(Metrics.MbsEvent.FAILURE, fakeMetrics.lastMbsEvent);
+    // Not regenerated: no lock taken and no private artifacts written.
+    assertTrue(s3TestClient.listFiles(PRIVATE_BUCKET).isEmpty());
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
   }
 
+  // TODO: remove when all envs deploy the config file
   @Test
-  public void loadOrGenerateCertificate_concurrentInstances_mutualExclusionAndSingleWinner()
+  public void runOneIteration_missingConfig_fallsBackToHardcodedDefaultConfigAndGenerates() {
+    s3TestClient.deleteFile(PUBLIC_BUCKET, S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH);
+    Injector injector = createTestInjector();
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
+
+    runMonitorIteration(injector);
+
+    MeasurementBoundBundle mbc = activeCertificate(provider);
+    assertNotNull(mbc);
+    assertEquals(
+        Instant.parse("2026-10-01T00:00:00Z"), mbc.getCertificate().getNotBefore().toInstant());
+    assertEquals(
+        Instant.parse("2027-02-02T13:00:00Z"), mbc.getCertificate().getNotAfter().toInstant());
+    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
+    assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getLockPath()));
+  }
+
+  @Test
+  public void runOneIteration_concurrentInstances_mutualExclusionAndSingleWinner()
       throws Exception {
     int numThreads = 20;
     java.util.concurrent.ExecutorService executor =
         java.util.concurrent.Executors.newFixedThreadPool(numThreads);
     try {
-      java.util.List<java.util.concurrent.Callable<MeasurementBoundCertificate>> tasks =
+      java.util.List<java.util.concurrent.Callable<MeasurementBoundBundle>> tasks =
           new java.util.ArrayList<>();
       for (int i = 0; i < numThreads; i++) {
         final int threadId = i;
         tasks.add(
             () -> {
               Injector injector = createTestInjector("i-worker-" + threadId);
-              MeasurementBoundCertificateReloader reloader =
-                  injector.getInstance(MeasurementBoundCertificateReloader.class);
-              MeasurementBoundCertificateProvider provider =
-                  injector.getInstance(MeasurementBoundCertificateProvider.class);
-              reloader.reloadCertificate();
-              MeasurementBoundCertificate cert = activeCertificate(provider);
+              TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
+              runMonitorIteration(injector);
+              MeasurementBoundBundle cert = activeCertificate(provider);
               assertNotNull(cert);
               return cert;
             });
       }
 
-      java.util.List<java.util.concurrent.Future<MeasurementBoundCertificate>> futures =
+      java.util.List<java.util.concurrent.Future<MeasurementBoundBundle>> futures =
           executor.invokeAll(tasks);
-      java.util.List<MeasurementBoundCertificate> results = new java.util.ArrayList<>();
-      for (java.util.concurrent.Future<MeasurementBoundCertificate> future : futures) {
+      java.util.List<MeasurementBoundBundle> results = new java.util.ArrayList<>();
+      for (java.util.concurrent.Future<MeasurementBoundBundle> future : futures) {
         results.add(future.get());
       }
 
       // Verify all instances received the exact same generated certificate
-      MeasurementBoundCertificate first = results.get(0);
+      MeasurementBoundBundle first = results.get(0);
       assertNotNull(first);
       for (int i = 1; i < results.size(); i++) {
-        MeasurementBoundCertificate current = results.get(i);
+        MeasurementBoundBundle current = results.get(i);
         assertEquals(
             first.getCertificate().getSubjectX500Principal(),
             current.getCertificate().getSubjectX500Principal());
@@ -376,24 +407,21 @@ public class MbsIntegrationTest {
       }
 
       // Verify lock file was cleanly released by winner
-      assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, bucketProperties.getLockPath()));
+      assertFalse(s3TestClient.fileExists(PRIVATE_BUCKET, S3BackupPaths.getLockPath()));
     } finally {
       executor.shutdownNow();
     }
   }
 
   @Test
-  public void reloadCertificate_updatesRunningInstanceWhenStorageChangesInBackground()
+  public void runOneIteration_updatesRunningInstanceWhenStorageChangesInBackground()
       throws Exception {
     // 1. Normal operation on Certificate A
     Injector runningInjector = createTestInjector("i-running-1", "CN=Initial MBS Root");
-    MeasurementBoundCertificateReloader runningReloader =
-        runningInjector.getInstance(MeasurementBoundCertificateReloader.class);
-    MeasurementBoundCertificateProvider runningProvider =
-        runningInjector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider runningProvider = runningInjector.getInstance(TrustPackageProvider.class);
 
-    runningReloader.reloadCertificate();
-    MeasurementBoundCertificate certA = activeCertificate(runningProvider);
+    runMonitorIteration(runningInjector);
+    MeasurementBoundBundle certA = activeCertificate(runningProvider);
     assertNotNull(certA);
     assertSame(certA, activeCertificate(runningProvider));
     assertEquals("CN=Initial MBS Root", certA.getCertificate().getSubjectX500Principal().getName());
@@ -416,14 +444,14 @@ public class MbsIntegrationTest {
     // (Simulating rotation: S3 buckets are re-provisioned and populated with new credentials)
     s3TestClient.clearBucket(PUBLIC_BUCKET);
     s3TestClient.clearBucket(PRIVATE_BUCKET);
+    s3TestClient.putFile(
+        PUBLIC_BUCKET, S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH, DEFAULT_CONFIG_TEXTPROTO);
 
     Injector rotationInjector = createTestInjector("i-rotator-1", "CN=Rotated MBS Root");
-    MeasurementBoundCertificateReloader rotationReloader =
-        rotationInjector.getInstance(MeasurementBoundCertificateReloader.class);
-    MeasurementBoundCertificateProvider rotationProvider =
-        rotationInjector.getInstance(MeasurementBoundCertificateProvider.class);
-    rotationReloader.reloadCertificate();
-    MeasurementBoundCertificate certB = activeCertificate(rotationProvider);
+    TrustPackageProvider rotationProvider =
+        rotationInjector.getInstance(TrustPackageProvider.class);
+    runMonitorIteration(rotationInjector);
+    MeasurementBoundBundle certB = activeCertificate(rotationProvider);
     assertNotNull(certB);
     assertSame(certB, activeCertificate(rotationProvider));
     assertEquals("CN=Rotated MBS Root", certB.getCertificate().getSubjectX500Principal().getName());
@@ -437,8 +465,8 @@ public class MbsIntegrationTest {
     assertSame(certA, activeCertificate(runningProvider));
 
     // 3. Reload is triggered on the running instance
-    runningReloader.reloadCertificate();
-    MeasurementBoundCertificate reloadedCert = activeCertificate(runningProvider);
+    runMonitorIteration(runningInjector);
+    MeasurementBoundBundle reloadedCert = activeCertificate(runningProvider);
 
     // 4. Verify running provider has updated to Certificate B
     assertNotNull(reloadedCert);
@@ -450,7 +478,7 @@ public class MbsIntegrationTest {
         certB.getPrivateKey().getEncoded(), reloadedCert.getPrivateKey().getEncoded());
 
     // Verify subsequent wait-free calls return Certificate B atomically
-    MeasurementBoundCertificate activeCert = activeCertificate(runningProvider);
+    MeasurementBoundBundle activeCert = activeCertificate(runningProvider);
     assertSame(reloadedCert, activeCert);
     assertEquals(
         "CN=Rotated MBS Root", activeCert.getCertificate().getSubjectX500Principal().getName());
@@ -505,5 +533,32 @@ public class MbsIntegrationTest {
     assertTrue(s3TestClient.listFiles(testBucket).isEmpty());
 
     s3TestClient.deleteBucket(testBucket);
+  }
+
+  private static final class FakeMetrics implements Metrics {
+    volatile MbsEvent lastMbsEvent;
+    volatile GenerationEvent lastGenerationEvent;
+    volatile LoadEvent lastLoadEvent;
+    volatile ConfigEvent lastConfigEvent;
+
+    @Override
+    public void recordEvent(MbsEvent event) {
+      this.lastMbsEvent = event;
+    }
+
+    @Override
+    public void recordGenerationEvent(GenerationEvent event) {
+      this.lastGenerationEvent = event;
+    }
+
+    @Override
+    public void recordLoadEvent(LoadEvent event) {
+      this.lastLoadEvent = event;
+    }
+
+    @Override
+    public void recordConfigEvent(ConfigEvent event) {
+      this.lastConfigEvent = event;
+    }
   }
 }

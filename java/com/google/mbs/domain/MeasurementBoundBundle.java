@@ -23,13 +23,13 @@ import java.security.cert.X509Certificate;
  * A container for an {@link X509Certificate}, corresponding {@link PrivateKey} and {@link
  * AttestationToken}.
  */
-public class MeasurementBoundCertificate {
+public class MeasurementBoundBundle {
 
   private final X509Certificate certificate;
   private final PrivateKey privateKey;
   private final AttestationToken attestationToken;
 
-  public MeasurementBoundCertificate(
+  public MeasurementBoundBundle(
       X509Certificate certificate, PrivateKey privateKey, AttestationToken attestationToken) {
     this.certificate = certificate;
     this.privateKey = privateKey;

@@ -36,28 +36,5 @@ public interface KeyBackupStorage {
    */
   void releaseLock() throws KeyBackupAccessFailedException;
 
-  /**
-   * Retrieves the complete key backup.
-   *
-   * @throws KeyBackupNotFoundException if no artifact exists at all
-   * @throws KeyBackupPartiallyWrittenException if artifacts are missing and the certificate is one
-   *     of them, proving the backup was never completed
-   * @throws KeyBackupIncompleteException if a completed backup is missing artifacts
-   * @throws KeyBackupAccessFailedException if the artifacts could not be read
-   */
-  @NonNull KeyBackup getKeyBackup()
-      throws KeyBackupNotFoundException,
-          KeyBackupPartiallyWrittenException,
-          KeyBackupIncompleteException,
-          KeyBackupAccessFailedException;
-
-  /**
-   * Stores the complete key backup.
-   *
-   * <p>Implementations must write the certificate last, so that it acts as a completion sentinel
-   * for concurrent readers.
-   *
-   * @throws KeyBackupAccessFailedException if any artifact could not be written
-   */
-  void putKeyBackup(KeyBackup keyBackup) throws KeyBackupAccessFailedException;
+  @NonNull StorageSnapshot getSnapshot() throws KeyBackupAccessFailedException;
 }

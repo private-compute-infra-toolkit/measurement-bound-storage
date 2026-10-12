@@ -1,0 +1,56 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.mbs.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "CertificatesConfigProto";
+option java_package = "com.google.mbs.proto";
+
+message ValidityPeriod {
+  google.protobuf.Timestamp not_before = 1;
+  google.protobuf.Timestamp not_after = 2;
+}
+
+message SelfSignedCertificate {
+  optional int32 epoch_id = 1;
+  ValidityPeriod validity_period = 2;
+}
+
+message CrossSignedCertificate {
+  optional int32 private_key_epoch_id = 1;
+  optional int32 public_key_epoch_id = 2;
+  ValidityPeriod validity_period = 3;
+}
+
+message CertificatesConfig {
+  // Inventory of self-signed root certificates mapped by epoch ID.
+  map<int32, SelfSignedCertificate> self_signed_certificates = 1;
+
+  // Inventory of cross-signed certificates mapped by "<private_key_epoch_id>_<public_key_epoch_id>".
+  map<string, CrossSignedCertificate> cross_signed_certificates = 2;
+
+  // Epoch IDs actively used for signing new artifacts.
+  repeated int32 active_self_signed_certificate_ids = 3;
+
+  // Cross-signed certificate IDs attached to responses during transition periods.
+  repeated string active_cross_signed_certificate_ids = 4;
+
+  // Self-signed certificate IDs authorized for validation and propagated to trust stores.
+  repeated int32 acceptable_self_signed_certificate_ids = 5;
+}

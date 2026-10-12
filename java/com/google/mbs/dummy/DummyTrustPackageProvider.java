@@ -17,37 +17,61 @@
 package com.google.mbs.dummy;
 
 import com.google.mbs.domain.AttestationToken;
-import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.CertificatesConfig;
+import com.google.mbs.domain.CertificatesConfigProvider;
+import com.google.mbs.domain.MeasurementBoundBundle;
+import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
+import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.TrustPackage;
+import com.google.mbs.domain.TrustPackageProvider;
+import com.google.mbs.domain.TrustPackageReloader;
+import com.google.mbs.domain.ValidityPeriod;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
+import org.jspecify.annotations.NonNull;
 
-/** In-memory, placeholder implementation of MeasurementBoundCertificateProvider. */
-public class DummyMeasurementBoundCertificateProvider
-    implements MeasurementBoundCertificateProvider, MeasurementBoundCertificateReloader {
+/** In-memory, placeholder implementation of {@link TrustPackageProvider}. */
+public class DummyTrustPackageProvider
+    implements TrustPackageProvider,
+        TrustPackageReloader,
+        MeasurementBoundCertificateGenerator,
+        CertificatesConfigProvider {
   // RFC 5280 limits the serial number to 20 bytes (160 bits).
   // A positive BigInteger requires 1 bit for the sign, leaving 159 bits for entropy.
   private static final int SERIAL_NUMBER_ENTROPY_BITS = 159;
 
+  private static final CertificatesConfig DUMMY_CONFIG =
+      new CertificatesConfig(
+          Map.of(
+              0,
+              new SelfSignedCertificate(
+                  0,
+                  new ValidityPeriod(
+                      Instant.parse("2026-01-01T00:00:00Z"),
+                      Instant.parse("2100-01-01T00:00:00Z")))),
+          Map.of(),
+          Set.of(0),
+          Set.of(),
+          Set.of(0));
+
   private static final SecureRandom secureRandom = new SecureRandom();
-  private volatile MeasurementBoundCertificate mbc = null;
+  private volatile MeasurementBoundBundle mbc = null;
 
   @Override
   public TrustPackage getActiveTrustPackage() {
-    MeasurementBoundCertificate cert = mbc;
+    MeasurementBoundBundle cert = mbc;
     if (cert == null) {
       throw new IllegalStateException("Measurement-bound certificate has not been initialized yet");
     }
@@ -55,7 +79,15 @@ public class DummyMeasurementBoundCertificateProvider
   }
 
   @Override
-  public synchronized void reloadCertificate() {
+  public @NonNull CertificatesConfig getCertificatesConfig() {
+    return DUMMY_CONFIG;
+  }
+
+  @Override
+  public void generateCertificates(CertificatesConfig unused) {}
+
+  @Override
+  public synchronized void reload() {
     try {
       mbc = generateNewCertificate();
     } catch (Exception e) {
@@ -63,7 +95,7 @@ public class DummyMeasurementBoundCertificateProvider
     }
   }
 
-  private MeasurementBoundCertificate generateNewCertificate() throws Exception {
+  private MeasurementBoundBundle generateNewCertificate() throws Exception {
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
     keyGen.initialize(2048, secureRandom);
     KeyPair keyPair = keyGen.generateKeyPair();
@@ -71,18 +103,16 @@ public class DummyMeasurementBoundCertificateProvider
     PrivateKey privateKey = keyPair.getPrivate();
     PublicKey publicKey = keyPair.getPublic();
 
-    Instant now = Instant.now();
     BigInteger serial = new BigInteger(SERIAL_NUMBER_ENTROPY_BITS, secureRandom);
-    Instant notBefore = now.minus(Duration.ofDays(1));
-    Instant notAfter = now.plus(Duration.ofDays(30));
+    ValidityPeriod validityPeriod = DUMMY_CONFIG.selfSignedCertificates().get(0).validityPeriod();
     X500Name issuerAndSubject = new X500Name("CN=Standalone CA");
 
     X509v3CertificateBuilder certBuilder =
         new JcaX509v3CertificateBuilder(
             issuerAndSubject,
             serial,
-            Date.from(notBefore),
-            Date.from(notAfter),
+            Date.from(validityPeriod.notBefore()),
+            Date.from(validityPeriod.notAfter()),
             issuerAndSubject,
             publicKey);
 
@@ -93,6 +123,6 @@ public class DummyMeasurementBoundCertificateProvider
         new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
 
     AttestationToken token = AttestationToken.fromBytes("AttestationToken".getBytes());
-    return new MeasurementBoundCertificate(certificate, privateKey, token);
+    return new MeasurementBoundBundle(certificate, privateKey, token);
   }
 }

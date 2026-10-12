@@ -27,7 +27,7 @@ import java.util.Objects;
  * @param crossSignedCertificates list of cross-signed X.509 certificates
  */
 public record TrustPackage(
-    List<MeasurementBoundCertificate> bundles, List<X509Certificate> crossSignedCertificates) {
+    List<MeasurementBoundBundle> bundles, List<X509Certificate> crossSignedCertificates) {
 
   public TrustPackage {
     Objects.requireNonNull(bundles, "bundles must not be null");

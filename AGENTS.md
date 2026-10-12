@@ -11,9 +11,9 @@ This repository follows the **Ports and Adapters (Hexagonal Architecture)** patt
 1. **Domain (`java/com/google/mbs/domain/`, `java/com/google/mbs/qualifier/`)**
 
    - **Core Invariant**: Pure, technology-agnostic business logic and contracts. Keep `BUILD` `deps` restricted to the JDK, `@AutoValue`, and `jakarta.inject` annotations (never AWS SDK, Tink, BouncyCastle, JNI, Guice `com.google.inject`, or I/O libraries).
-   - **Inbound (Driving) Ports**: Interfaces consumed by callers/orchestrators (`MeasurementBoundCertificateProvider`, `MeasurementBoundCertificateReloader`, `CertificateMonitor`).
+   - **Inbound (Driving) Ports**: Interfaces consumed by callers/orchestrators (`TrustPackageProvider`, `TrustPackageReloader`, `CertificateMonitor`).
    - **Outbound (Driven) Ports**: Interfaces for required external capabilities (`KmsClientInterface`, `KeyBackupStorage`, `AttestationCollector`, `Metrics`).
-   - **Domain Models, Qualifiers & Exceptions**: Immutable entities (`MeasurementBoundCertificate`, `AttestationToken`), JSR-330 `@Qualifier` annotations (`@MbsRoot`, `@KmsKeyArn`), and domain exceptions.
+   - **Domain Models, Qualifiers & Exceptions**: Immutable entities (`MeasurementBoundBundle`, `AttestationToken`), JSR-330 `@Qualifier` annotations (`@MbsRoot`, `@KmsKeyArn`), and domain exceptions.
 
 2. **Adapters (`java/com/google/mbs/adapters/`)**
 

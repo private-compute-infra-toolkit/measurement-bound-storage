@@ -1,0 +1,53 @@
+self_signed_certificates {
+  key: 0
+  value {
+    epoch_id: 0
+    validity_period {
+      not_before {
+        seconds: 1700000000
+        nanos: 0
+      }
+      not_after {
+        seconds: 1710000000
+        nanos: 0
+      }
+    }
+  }
+}
+self_signed_certificates {
+  key: 2
+  value {
+    epoch_id: 2
+    validity_period {
+      not_before {
+        seconds: 1705000000
+        nanos: 0
+      }
+      not_after {
+        seconds: 1715000000
+        nanos: 0
+      }
+    }
+  }
+}
+cross_signed_certificates {
+  key: "0_2"
+  value {
+    private_key_epoch_id: 0
+    public_key_epoch_id: 2
+    validity_period {
+      not_before {
+        seconds: 1705000000
+        nanos: 0
+      }
+      not_after {
+        seconds: 1710000000
+        nanos: 0
+      }
+    }
+  }
+}
+active_self_signed_certificate_ids: 0
+active_cross_signed_certificate_ids: "0_2"
+acceptable_self_signed_certificate_ids: 0
+acceptable_self_signed_certificate_ids: 2

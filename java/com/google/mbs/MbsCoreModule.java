@@ -19,16 +19,22 @@ package com.google.mbs;
 import com.google.inject.AbstractModule;
 import com.google.inject.Key;
 import com.google.inject.Provides;
+import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
 import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.adapters.S3BackupPaths;
+import com.google.mbs.adapters.S3CertificatesConfigProvider;
 import com.google.mbs.adapters.S3KeyBackupStorage;
 import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.CertificatesConfigBucketProperties;
+import com.google.mbs.domain.CertificatesConfigProvider;
 import com.google.mbs.domain.KeyBackupBucketProperties;
 import com.google.mbs.domain.KeyBackupStorage;
 import com.google.mbs.domain.KmsClientInterface;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.TrustPackageProvider;
+import com.google.mbs.domain.TrustPackageReloader;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
@@ -55,13 +61,23 @@ final class MbsCoreModule extends AbstractModule {
 
     bind(KeyBackupStorage.class).to(S3KeyBackupStorage.class).in(Singleton.class);
 
+    bind(MeasurementBoundCertificateGenerator.class)
+        .to(KmsMeasurementBoundCertificateGenerator.class);
+
     bind(KmsMeasurementBoundCertificateProvider.class).in(Singleton.class);
-    bind(MeasurementBoundCertificateProvider.class)
-        .to(KmsMeasurementBoundCertificateProvider.class);
-    bind(MeasurementBoundCertificateReloader.class)
-        .to(KmsMeasurementBoundCertificateProvider.class);
+    bind(TrustPackageProvider.class).to(KmsMeasurementBoundCertificateProvider.class);
+    bind(TrustPackageReloader.class).to(KmsMeasurementBoundCertificateProvider.class);
 
     bind(CertificateMonitor.class).to(MeasurementBoundCertificateMonitor.class).in(Singleton.class);
+  }
+
+  // TODO: bind S3CertificatesConfigProvider directly once certificates_config.textproto is
+  // deployed in all environments.
+  @Provides
+  @Singleton
+  CertificatesConfigProvider provideCertificatesConfigProvider(
+      S3CertificatesConfigProvider s3CertificatesConfigProvider) {
+    return new DefaultingCertificatesConfigProvider(s3CertificatesConfigProvider);
   }
 
   @Provides
@@ -69,5 +85,13 @@ final class MbsCoreModule extends AbstractModule {
   KeyBackupBucketProperties provideKeyBackupBucketProperties(
       @PublicBackupBucket String publicBucketName, @PrivateBackupBucket String privateBucketName) {
     return new KeyBackupBucketPropertiesFactory(publicBucketName, privateBucketName).create();
+  }
+
+  @Provides
+  @Singleton
+  CertificatesConfigBucketProperties provideCertificatesConfigBucketProperties(
+      @PublicBackupBucket String publicBucketName) {
+    return new CertificatesConfigBucketProperties(
+        publicBucketName, S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH);
   }
 }

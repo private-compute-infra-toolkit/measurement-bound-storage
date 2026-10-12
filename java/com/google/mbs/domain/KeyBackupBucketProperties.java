@@ -18,6 +18,7 @@ package com.google.mbs.domain;
 
 import com.google.auto.value.AutoValue;
 
+/** Configuration properties for the S3 key backup buckets. */
 @AutoValue
 public abstract class KeyBackupBucketProperties {
 
@@ -29,16 +30,6 @@ public abstract class KeyBackupBucketProperties {
 
   public abstract String getPrivateBucketName();
 
-  public abstract String getKmsEncryptedDataKeyPath();
-
-  public abstract String getAesEncryptedPrivateKeyPath();
-
-  public abstract String getCertPath();
-
-  public abstract String getAttestationDocPath();
-
-  public abstract String getLockPath();
-
   public abstract String getCacheControl();
 
   @AutoValue.Builder
@@ -46,16 +37,6 @@ public abstract class KeyBackupBucketProperties {
     public abstract KeyBackupBucketProperties.Builder setPublicBucketName(String value);
 
     public abstract KeyBackupBucketProperties.Builder setPrivateBucketName(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setKmsEncryptedDataKeyPath(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setAesEncryptedPrivateKeyPath(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setCertPath(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setAttestationDocPath(String value);
-
-    public abstract KeyBackupBucketProperties.Builder setLockPath(String value);
 
     public abstract KeyBackupBucketProperties.Builder setCacheControl(String value);
 

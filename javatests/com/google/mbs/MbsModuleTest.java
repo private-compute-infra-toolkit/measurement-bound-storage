@@ -29,22 +29,27 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.mbs.adapters.AwsAttestationCollector;
 import com.google.mbs.adapters.AwsKmsClient;
+import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
 import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.adapters.S3BackupPaths;
 import com.google.mbs.adapters.S3KeyBackupStorage;
 import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
 import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.CertificatesConfigBucketProperties;
+import com.google.mbs.domain.CertificatesConfigProvider;
 import com.google.mbs.domain.KeyBackupBucketProperties;
 import com.google.mbs.domain.KeyBackupStorage;
 import com.google.mbs.domain.KmsClientInterface;
-import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.MeasurementBoundBundle;
+import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.TrustPackage;
+import com.google.mbs.domain.TrustPackageProvider;
+import com.google.mbs.domain.TrustPackageReloader;
 import com.google.mbs.dummy.DummyMbsModule;
-import com.google.mbs.dummy.DummyMeasurementBoundCertificateProvider;
+import com.google.mbs.dummy.DummyTrustPackageProvider;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
@@ -59,36 +64,49 @@ import software.amazon.awssdk.services.s3.S3Client;
 public class MbsModuleTest {
 
   @Test
-  public void testDummyMbsModuleProvidesCertificates() {
+  public void testDummyMbsModuleProvidesCertificates() throws Exception {
     Injector injector = Guice.createInjector(new DummyMbsModule());
 
-    MeasurementBoundCertificateProvider provider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
     assertNotNull(provider);
-    assertTrue(provider instanceof DummyMeasurementBoundCertificateProvider);
+    assertTrue(provider instanceof DummyTrustPackageProvider);
 
-    MeasurementBoundCertificateReloader reloader =
-        injector.getInstance(MeasurementBoundCertificateReloader.class);
+    TrustPackageReloader reloader = injector.getInstance(TrustPackageReloader.class);
     assertNotNull(reloader);
     assertSame(provider, reloader);
 
+    MeasurementBoundCertificateGenerator generator =
+        injector.getInstance(MeasurementBoundCertificateGenerator.class);
+    assertNotNull(generator);
+    assertSame(provider, generator);
+
+    CertificatesConfigProvider configProvider =
+        injector.getInstance(CertificatesConfigProvider.class);
+    assertNotNull(configProvider);
+    assertSame(provider, configProvider);
+
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
-    reloader.reloadCertificate();
+    generator.generateCertificates(configProvider.getCertificatesConfig());
+    reloader.reload();
     TrustPackage package1 = provider.getActiveTrustPackage();
     assertNotNull(package1);
     assertEquals(1, package1.bundles().size());
     assertTrue(package1.crossSignedCertificates().isEmpty());
-    MeasurementBoundCertificate mbc1 = package1.bundles().get(0);
+    MeasurementBoundBundle mbc1 = package1.bundles().get(0);
     assertNotNull(mbc1.getCertificate());
     assertNotNull(mbc1.getPrivateKey());
+    var expectedValidity =
+        configProvider.getCertificatesConfig().selfSignedCertificates().get(0).validityPeriod();
+    assertEquals(expectedValidity.notBefore(), mbc1.getCertificate().getNotBefore().toInstant());
+    assertEquals(expectedValidity.notAfter(), mbc1.getCertificate().getNotAfter().toInstant());
 
-    reloader.reloadCertificate();
+    reloader.reload();
     TrustPackage package2 = provider.getActiveTrustPackage();
     assertNotNull(package2);
     assertEquals(1, package2.bundles().size());
     assertTrue(package2.crossSignedCertificates().isEmpty());
-    MeasurementBoundCertificate mbc2 = package2.bundles().get(0);
+    MeasurementBoundBundle mbc2 = package2.bundles().get(0);
     assertNotNull(mbc2.getCertificate());
     assertNotNull(mbc2.getPrivateKey());
     assertNotEquals(
@@ -126,20 +144,37 @@ public class MbsModuleTest {
               }
             });
 
-    MeasurementBoundCertificateProvider provider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
     assertNotNull(provider);
     assertTrue(provider instanceof KmsMeasurementBoundCertificateProvider);
 
-    MeasurementBoundCertificateReloader reloader =
-        injector.getInstance(MeasurementBoundCertificateReloader.class);
+    TrustPackageReloader reloader = injector.getInstance(TrustPackageReloader.class);
     assertNotNull(reloader);
     assertSame(provider, reloader);
+
+    MeasurementBoundCertificateGenerator generator =
+        injector.getInstance(MeasurementBoundCertificateGenerator.class);
+    assertNotNull(generator);
+    assertTrue(generator instanceof KmsMeasurementBoundCertificateGenerator);
 
     KeyBackupBucketProperties bucketProps = injector.getInstance(KeyBackupBucketProperties.class);
     assertNotNull(bucketProps);
     assertEquals("test-public-bucket", bucketProps.getPublicBucketName());
     assertEquals("test-private-bucket", bucketProps.getPrivateBucketName());
+
+    CertificatesConfigBucketProperties configBucketProps =
+        injector.getInstance(CertificatesConfigBucketProperties.class);
+    assertNotNull(configBucketProps);
+    assertEquals("test-public-bucket", configBucketProps.bucketName());
+    assertEquals(S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH, configBucketProps.configFileName());
+
+    CertificatesConfigProvider configProvider1 =
+        injector.getInstance(CertificatesConfigProvider.class);
+    CertificatesConfigProvider configProvider2 =
+        injector.getInstance(CertificatesConfigProvider.class);
+    assertNotNull(configProvider1);
+    assertSame(configProvider1, configProvider2);
+    assertTrue(configProvider1 instanceof DefaultingCertificatesConfigProvider);
 
     KeyBackupStorage storage1 = injector.getInstance(KeyBackupStorage.class);
     KeyBackupStorage storage2 = injector.getInstance(KeyBackupStorage.class);

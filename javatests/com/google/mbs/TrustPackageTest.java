@@ -20,7 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
-import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundBundle;
 import com.google.mbs.domain.TrustPackage;
 import java.security.cert.X509Certificate;
 import java.util.List;
@@ -33,7 +33,7 @@ public class TrustPackageTest {
 
   @Test
   public void constructor_storesBundlesAndCrossCertificates() {
-    MeasurementBoundCertificate mbc = mock(MeasurementBoundCertificate.class);
+    MeasurementBoundBundle mbc = mock(MeasurementBoundBundle.class);
     X509Certificate x509 = mock(X509Certificate.class);
 
     TrustPackage result = new TrustPackage(List.of(mbc), List.of(x509));
@@ -55,6 +55,6 @@ public class TrustPackageTest {
   public void constructor_nullCrossSignedCertificates_throwsNullPointerException() {
     assertThrows(
         NullPointerException.class,
-        () -> new TrustPackage(List.of(mock(MeasurementBoundCertificate.class)), null));
+        () -> new TrustPackage(List.of(mock(MeasurementBoundBundle.class)), null));
   }
 }

@@ -35,11 +35,6 @@ public class KeyBackupBucketPropertiesFactoryTest {
 
     assertEquals(publicBucketName, properties.getPublicBucketName());
     assertEquals(privateBucketName, properties.getPrivateBucketName());
-    assertEquals("private/0/root_data_key.kms", properties.getKmsEncryptedDataKeyPath());
-    assertEquals("private/0/root_private_key.aes", properties.getAesEncryptedPrivateKeyPath());
-    assertEquals("public/0/root_certificate.pem", properties.getCertPath());
-    assertEquals("public/0/attestation_doc.base64", properties.getAttestationDocPath());
-    assertEquals("private/0/root_generation.lock", properties.getLockPath());
     assertEquals("public, max-age=120", properties.getCacheControl());
   }
 }

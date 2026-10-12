@@ -17,7 +17,7 @@
 package com.google.mbs.domain;
 
 /** Exception thrown when backup storage is already locked by another instance. */
-public class StorageAlreadyLockedException extends Exception {
+public class StorageAlreadyLockedException extends KeyBackupStorageException {
 
   public StorageAlreadyLockedException(String message) {
     super(message);

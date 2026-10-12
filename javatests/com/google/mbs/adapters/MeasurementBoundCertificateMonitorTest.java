@@ -16,24 +16,37 @@
 
 package com.google.mbs.adapters;
 
-import static com.google.mbs.domain.Metrics.ReloadStatus.FAILURE;
-import static com.google.mbs.domain.Metrics.ReloadStatus.SUCCESS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.CertificatesConfig;
+import com.google.mbs.domain.CertificatesConfigProvider;
+import com.google.mbs.domain.InvalidCertificatesConfigException;
+import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.TrustPackageReloader;
+import com.google.mbs.domain.ValidityPeriod;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
@@ -41,16 +54,35 @@ import org.mockito.junit.MockitoRule;
 @RunWith(JUnit4.class)
 public class MeasurementBoundCertificateMonitorTest {
 
+  private static final CertificatesConfig CONFIG =
+      new CertificatesConfig(
+          Map.of(
+              0,
+              new SelfSignedCertificate(
+                  0,
+                  new ValidityPeriod(
+                      Instant.parse("1930-01-01T00:00:00Z"),
+                      Instant.parse("1930-02-01T00:00:00Z")))),
+          Map.of(),
+          Set.of(0),
+          Set.of(),
+          Set.of(0));
+
   @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
-  @Mock private MeasurementBoundCertificateReloader mockReloader;
+  @Mock private MeasurementBoundCertificateGenerator mockGenerator;
+  @Mock private TrustPackageReloader mockReloader;
+  @Mock private CertificatesConfigProvider mockConfigProvider;
   @Mock private Metrics mockMetrics;
 
   private MeasurementBoundCertificateMonitor service;
 
   @Before
-  public void setUp() {
-    service = new MeasurementBoundCertificateMonitor(mockReloader, mockMetrics);
+  public void setUp() throws Exception {
+    when(mockConfigProvider.getCertificatesConfig()).thenReturn(CONFIG);
+    service =
+        new MeasurementBoundCertificateMonitor(
+            mockGenerator, mockReloader, mockConfigProvider, mockMetrics);
   }
 
   @After
@@ -62,21 +94,54 @@ public class MeasurementBoundCertificateMonitorTest {
   }
 
   @Test
-  public void runOneIteration_delegatesToCertificateReloaderAndSetsReloadSuccess() {
+  public void runOneIteration_delegatesToGeneratorThenReloader() throws Exception {
     service.runOneIteration();
 
-    verify(mockReloader).reloadCertificate();
-    verify(mockMetrics).setReloadStatus(SUCCESS);
+    InOrder inOrder = inOrder(mockConfigProvider, mockGenerator, mockReloader, mockMetrics);
+    inOrder.verify(mockConfigProvider).getCertificatesConfig();
+    inOrder.verify(mockGenerator).generateCertificates(same(CONFIG));
+    inOrder.verify(mockReloader).reload();
+    inOrder.verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
+  }
+
+  // TODO: rework this test when reload would also rely on config
+  @Test
+  public void runOneIteration_whenConfigFetchFails_skipsGenerationReloadsAndRecordsFailure()
+      throws Exception {
+    when(mockConfigProvider.getCertificatesConfig())
+        .thenThrow(new InvalidCertificatesConfigException("Simulated config fetch failure"));
+
+    service.runOneIteration();
+
+    verify(mockGenerator, never()).generateCertificates(any());
+    verify(mockReloader).reload();
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
   }
 
   @Test
-  public void runOneIteration_whenReloaderThrowsException_setsReloadFailureAndSwallowsException() {
-    doThrow(new RuntimeException("Simulated KMS failure")).when(mockReloader).reloadCertificate();
+  public void
+      runOneIteration_whenGeneratorThrowsException_stillDelegatesToReloaderAndRecordsFailure() {
+    doThrow(new RuntimeException("Simulated generation failure"))
+        .when(mockGenerator)
+        .generateCertificates(any());
 
     service.runOneIteration();
 
-    verify(mockReloader).reloadCertificate();
-    verify(mockMetrics).setReloadStatus(FAILURE);
+    InOrder inOrder = inOrder(mockGenerator, mockReloader, mockMetrics);
+    inOrder.verify(mockGenerator).generateCertificates(any());
+    inOrder.verify(mockReloader).reload();
+    inOrder.verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
+  }
+
+  @Test
+  public void runOneIteration_whenReloaderThrowsException_swallowsExceptionAndRecordsFailure() {
+    doThrow(new RuntimeException("Simulated KMS failure")).when(mockReloader).reload();
+
+    service.runOneIteration();
+
+    verify(mockGenerator).generateCertificates(any());
+    verify(mockReloader).reload();
+    verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
   }
 
   @Test
@@ -86,7 +151,7 @@ public class MeasurementBoundCertificateMonitorTest {
 
   @Test
   public void serviceName_returnsConfiguredThreadName() {
-    assertEquals("mbs-certificate-reloader", service.serviceName());
+    assertEquals("mbs-certificate-monitor", service.serviceName());
   }
 
   @Test
@@ -96,7 +161,8 @@ public class MeasurementBoundCertificateMonitorTest {
     service.start();
     service.awaitRunning();
     assertTrue(service.isRunning());
-    verify(mockReloader, timeout(5000)).reloadCertificate();
+    verify(mockGenerator, timeout(5000)).generateCertificates(any());
+    verify(mockReloader, timeout(5000)).reload();
 
     service.stop();
     service.awaitTerminated();

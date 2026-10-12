@@ -17,223 +17,184 @@
 package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
-import com.google.mbs.domain.KeyBackup;
+import com.google.mbs.domain.ArtifactType;
+import com.google.mbs.domain.BackupHandle;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.KeyBackupIncompleteException;
-import com.google.mbs.domain.KeyBackupNotFoundException;
-import com.google.mbs.domain.KeyBackupPartiallyWrittenException;
 import com.google.mbs.domain.KeyBackupStorage;
-import com.google.mbs.domain.Metrics;
-import com.google.mbs.domain.Metrics.MbsEvent;
 import com.google.mbs.domain.StorageAlreadyLockedException;
-import com.google.mbs.qualifier.InstanceId;
+import com.google.mbs.domain.StorageSnapshot;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
-import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
 import software.amazon.awssdk.core.exception.SdkException;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.ChecksumAlgorithm;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
-import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 /**
- * Storage adapter handling S3 interactions and distributed locking for MBS certificates and keys.
+ * Storage adapter that tracks the S3 backup layout by listing the buckets, and delegates reads and
+ * writes to {@link S3BackupReader} and {@link S3BackupWriter}.
  */
 @Singleton
 public class S3KeyBackupStorage implements KeyBackupStorage {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-  private static final int HTTP_STATUS_PRECONDITION_FAILED = 412;
-  private static final String AWS_ERROR_CODE_PRECONDITION_FAILED = "PreconditionFailed";
-  private static final String HEADER_IF_NONE_MATCH = "If-None-Match";
 
-  private static final int KEY_BACKUP_ARTIFACT_COUNT = 4;
+  private static final int EPOCH_KEY_SEGMENT_COUNT = 3;
+
+  private static final Map<String, ArtifactType> PUBLIC_ARTIFACTS =
+      Map.of(
+          S3BackupPaths.getFileName(ArtifactType.CERT), ArtifactType.CERT,
+          S3BackupPaths.getFileName(ArtifactType.ATTESTATION_DOC), ArtifactType.ATTESTATION_DOC);
+
+  private static final Map<String, ArtifactType> PRIVATE_ARTIFACTS =
+      Map.of(
+          S3BackupPaths.getFileName(ArtifactType.KMS_DATA_KEY), ArtifactType.KMS_DATA_KEY,
+          S3BackupPaths.getFileName(ArtifactType.PRIVATE_KEY), ArtifactType.PRIVATE_KEY);
 
   private final S3Client s3Client;
   private final KeyBackupBucketProperties bucketProperties;
-  private final String instanceId;
-  private final Metrics metrics;
+  private final S3BackupReader reader;
+  private final S3BackupWriter writer;
+  private final AtomicReference<S3StorageSnapshot> cachedSnapshot;
 
   @Inject
   public S3KeyBackupStorage(
       S3Client s3Client,
       KeyBackupBucketProperties bucketProperties,
-      @InstanceId String instanceId,
-      Metrics metrics) {
+      S3BackupReader reader,
+      S3BackupWriter writer) {
     this.s3Client = s3Client;
     this.bucketProperties = bucketProperties;
-    this.instanceId = instanceId;
-    this.metrics = metrics;
+    this.reader = reader;
+    this.writer = writer;
+    this.cachedSnapshot = new AtomicReference<>(new S3StorageSnapshot(Map.of(), writer));
+  }
+
+  @Override
+  public @NonNull StorageSnapshot getSnapshot() throws KeyBackupAccessFailedException {
+    Map<Integer, EnumMap<ArtifactType, String>> etagsByEpoch = new HashMap<>();
+    listBucketInto(
+        etagsByEpoch,
+        bucketProperties.getPublicBucketName(),
+        S3BackupPaths.PUBLIC_PREFIX,
+        PUBLIC_ARTIFACTS);
+    listBucketInto(
+        etagsByEpoch,
+        bucketProperties.getPrivateBucketName(),
+        S3BackupPaths.PRIVATE_PREFIX,
+        PRIVATE_ARTIFACTS);
+
+    S3StorageSnapshot updated =
+        cachedSnapshot.updateAndGet(
+            previous -> {
+              Map<Integer, BackupHandle> previousHandles = previous.bundleHandles();
+              Map<Integer, BackupHandle> nextHandles = new HashMap<>();
+              for (Map.Entry<Integer, EnumMap<ArtifactType, String>> epochEtagsEntry :
+                  etagsByEpoch.entrySet()) {
+                int epoch = epochEtagsEntry.getKey();
+                EnumMap<ArtifactType, String> presentArtifactEtags = epochEtagsEntry.getValue();
+                nextHandles.put(
+                    epoch,
+                    reuseCachedBackupHandleOrCreateNew(
+                        epoch, presentArtifactEtags, previousHandles.get(epoch)));
+              }
+              return new S3StorageSnapshot(nextHandles, writer);
+            });
+    return new S3StorageSnapshot(new HashMap<>(updated.bundleHandles()), writer);
   }
 
   @Override
   public void acquireLock() throws StorageAlreadyLockedException, KeyBackupAccessFailedException {
-    try {
-      PutObjectRequest request =
-          PutObjectRequest.builder()
-              .bucket(bucketProperties.getPrivateBucketName())
-              .key(bucketProperties.getLockPath())
-              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-              .cacheControl("no-cache")
-              .overrideConfiguration(o -> o.putHeader(HEADER_IF_NONE_MATCH, "*"))
-              .build();
-      s3Client.putObject(request, RequestBody.fromString(instanceId));
-    } catch (SdkException e) {
-      if (e instanceof S3Exception s3Exception && isAlreadyLocked(s3Exception)) {
-        throw new StorageAlreadyLockedException(
-            "Generation lock present at " + bucketProperties.getLockPath(), e);
-      }
-      metrics.recordEvent(MbsEvent.S3_WRITE_FAILED);
-      logger.atWarning().withCause(e).log(
-          "Failed to write S3 generation lock %s/%s",
-          bucketProperties.getPrivateBucketName(), bucketProperties.getLockPath());
-      throw new KeyBackupAccessFailedException("Failed to write S3 generation lock file", e);
-    }
+    writer.acquireLock();
   }
 
   @Override
   public void releaseLock() throws KeyBackupAccessFailedException {
-    try {
-      s3Client.deleteObject(
-          DeleteObjectRequest.builder()
-              .bucket(bucketProperties.getPrivateBucketName())
-              .key(bucketProperties.getLockPath())
-              .build());
-    } catch (SdkException e) {
-      metrics.recordEvent(MbsEvent.S3_WRITE_FAILED);
-      logger.atWarning().withCause(e).log(
-          "Failed to delete S3 generation lock %s/%s",
-          bucketProperties.getPrivateBucketName(), bucketProperties.getLockPath());
-      throw new KeyBackupAccessFailedException("Failed to delete S3 generation lock file", e);
-    }
+    writer.releaseLock();
   }
 
-  static boolean isAlreadyLocked(S3Exception e) {
-    return e.statusCode() == HTTP_STATUS_PRECONDITION_FAILED
-        || (e.awsErrorDetails() != null
-            && AWS_ERROR_CODE_PRECONDITION_FAILED.equalsIgnoreCase(
-                e.awsErrorDetails().errorCode()));
-  }
-
-  @Override
-  public KeyBackup getKeyBackup()
-      throws KeyBackupNotFoundException,
-          KeyBackupPartiallyWrittenException,
-          KeyBackupIncompleteException,
-          KeyBackupAccessFailedException {
-    // putKeyBackup() writes the certificate last, so it is the completion sentinel: read it first,
-    // and observing it means the other artifacts were already durable.
-    Optional<byte[]> certBytes =
-        tryGetS3Object(bucketProperties.getPublicBucketName(), bucketProperties.getCertPath());
-    Optional<byte[]> kmsEncryptedDataKey =
-        tryGetS3Object(
-            bucketProperties.getPrivateBucketName(), bucketProperties.getKmsEncryptedDataKeyPath());
-    Optional<byte[]> aeadEncryptedPrivateKey =
-        tryGetS3Object(
-            bucketProperties.getPrivateBucketName(),
-            bucketProperties.getAesEncryptedPrivateKeyPath());
-    Optional<byte[]> attestationDocBytes =
-        tryGetS3Object(
-            bucketProperties.getPublicBucketName(), bucketProperties.getAttestationDocPath());
-
-    List<String> missing = new ArrayList<>();
-    if (certBytes.isEmpty()) {
-      missing.add(bucketProperties.getCertPath());
-    }
-    if (kmsEncryptedDataKey.isEmpty()) {
-      missing.add(bucketProperties.getKmsEncryptedDataKeyPath());
-    }
-    if (aeadEncryptedPrivateKey.isEmpty()) {
-      missing.add(bucketProperties.getAesEncryptedPrivateKeyPath());
-    }
-    if (attestationDocBytes.isEmpty()) {
-      missing.add(bucketProperties.getAttestationDocPath());
-    }
-
-    if (missing.size() == KEY_BACKUP_ARTIFACT_COUNT) {
-      throw new KeyBackupNotFoundException("Key backup absent");
-    }
-    if (certBytes.isEmpty()) {
-      // The certificate is written last, so a backup lacking it was never completed.
-      throw new KeyBackupPartiallyWrittenException(
-          "Key backup partially written, missing " + missing);
-    }
-    if (!missing.isEmpty()) {
-      // Certificate present, so a complete backup was published and has since lost artifacts.
-      throw new KeyBackupIncompleteException("Key backup incomplete, missing " + missing);
-    }
-
-    return new KeyBackup(
-        certBytes.get(),
-        kmsEncryptedDataKey.get(),
-        aeadEncryptedPrivateKey.get(),
-        attestationDocBytes.get());
-  }
-
-  @Override
-  public void putKeyBackup(KeyBackup keyBackup) throws KeyBackupAccessFailedException {
-    putS3Object(
-        bucketProperties.getPrivateBucketName(),
-        bucketProperties.getAesEncryptedPrivateKeyPath(),
-        keyBackup.aeadEncryptedPrivateKey());
-    putS3Object(
-        bucketProperties.getPrivateBucketName(),
-        bucketProperties.getKmsEncryptedDataKeyPath(),
-        keyBackup.kmsEncryptedDataKey());
-    putS3Object(
-        bucketProperties.getPublicBucketName(),
-        bucketProperties.getAttestationDocPath(),
-        keyBackup.attestationDocBytes());
-    // Written last, as the completion sentinel getKeyBackup() relies on.
-    putS3Object(
-        bucketProperties.getPublicBucketName(),
-        bucketProperties.getCertPath(),
-        keyBackup.certBytes());
-  }
-
-  private Optional<byte[]> tryGetS3Object(String bucket, String key)
+  private void listBucketInto(
+      Map<Integer, EnumMap<ArtifactType, String>> etagsByEpoch,
+      String bucket,
+      String prefix,
+      Map<String, ArtifactType> allowedArtifacts)
       throws KeyBackupAccessFailedException {
+    ListObjectsV2Request request =
+        ListObjectsV2Request.builder().bucket(bucket).prefix(prefix).build();
+    int count = 0;
     try {
-      return Optional.of(
-          s3Client
-              .getObject(
-                  GetObjectRequest.builder().bucket(bucket).key(key).build(),
-                  ResponseTransformer.toBytes())
-              .asByteArray());
-    } catch (NoSuchKeyException e) {
-      return Optional.empty();
+      for (S3Object s3Object : s3Client.listObjectsV2Paginator(request).contents()) {
+        count++;
+        recordArtifact(etagsByEpoch, s3Object, allowedArtifacts);
+      }
+      logger.atInfo().log("Listed S3 bucket %s/%s (%d objects)", bucket, prefix, count);
     } catch (SdkException e) {
-      metrics.recordEvent(MbsEvent.S3_FETCH_FAILED);
-      logger.atWarning().withCause(e).log("Failed to fetch S3 object %s/%s", bucket, key);
+      logger.atWarning().withCause(e).log("Failed to list S3 bucket %s/%s", bucket, prefix);
       throw new KeyBackupAccessFailedException(
-          "Failed to fetch object: " + key + " from bucket: " + bucket, e);
+          "Failed to list prefix: " + prefix + " of bucket: " + bucket, e);
     }
   }
 
-  private void putS3Object(String bucket, String key, byte[] content)
-      throws KeyBackupAccessFailedException {
-    try {
-      s3Client.putObject(
-          PutObjectRequest.builder()
-              .bucket(bucket)
-              .key(key)
-              .checksumAlgorithm(ChecksumAlgorithm.SHA256)
-              .cacheControl(bucketProperties.getCacheControl())
-              .build(),
-          RequestBody.fromBytes(content));
-    } catch (SdkException e) {
-      metrics.recordEvent(MbsEvent.S3_WRITE_FAILED);
-      logger.atWarning().withCause(e).log("Failed to put S3 object %s/%s", bucket, key);
-      throw new KeyBackupAccessFailedException(
-          "Failed to put object: " + key + " in bucket: " + bucket, e);
+  private static void recordArtifact(
+      Map<Integer, EnumMap<ArtifactType, String>> etagsByEpoch,
+      S3Object s3Object,
+      Map<String, ArtifactType> allowedArtifacts) {
+    String key = s3Object.key();
+    String[] segments = key.split("/", -1);
+    if (segments.length != EPOCH_KEY_SEGMENT_COUNT) {
+      return;
     }
+    ArtifactType artifact = allowedArtifacts.get(segments[2]);
+    if (artifact == null) {
+      return;
+    }
+    try {
+      int epoch = Integer.parseInt(segments[1]);
+      EnumMap<ArtifactType, String> epochArtifactEtags =
+          etagsByEpoch.computeIfAbsent(epoch, k -> new EnumMap<>(ArtifactType.class));
+      epochArtifactEtags.put(artifact, s3Object.eTag());
+    } catch (NumberFormatException notAnEpochDirectory) {
+      logger.atInfo().log("Ignoring unrecognized S3 key %s", key);
+    }
+  }
+
+  private BackupHandle reuseCachedBackupHandleOrCreateNew(
+      int epoch, EnumMap<ArtifactType, String> presentArtifactEtags, BackupHandle cachedHandle) {
+    if (cachedHandle instanceof S3CompleteBackupHandle cachedComplete
+        && cachedComplete.artifactEtags().equals(presentArtifactEtags)) {
+      logger.atInfo().log(
+          "Reusing cached BackupHandle (%s) for epoch %d with matching ETags: %s",
+          cachedComplete.getClass().getSimpleName(), epoch, presentArtifactEtags);
+      return cachedComplete;
+    }
+    BackupHandle newHandle = createHandle(epoch, presentArtifactEtags);
+    logger.atInfo().log(
+        "Created new BackupHandle (%s) for epoch %d with ETags: %s",
+        newHandle.getClass().getSimpleName(), epoch, presentArtifactEtags);
+    return newHandle;
+  }
+
+  private BackupHandle createHandle(int epoch, EnumMap<ArtifactType, String> presentArtifactEtags) {
+    Set<ArtifactType> presentArtifacts = presentArtifactEtags.keySet();
+    if (presentArtifacts.size() == ArtifactType.values().length) {
+      return new S3CompleteBackupHandle(epoch, reader, presentArtifactEtags);
+    }
+    List<String> missingFileNames =
+        EnumSet.complementOf(EnumSet.copyOf(presentArtifacts)).stream()
+            .map(S3BackupPaths::getFileName)
+            .toList();
+    // The certificate is written last, so treat a backup lacking it as never completed.
+    return presentArtifacts.contains(ArtifactType.CERT)
+        ? new BackupHandle.Incomplete(epoch, missingFileNames)
+        : new BackupHandle.PartiallyWritten(epoch, missingFileNames);
   }
 }
