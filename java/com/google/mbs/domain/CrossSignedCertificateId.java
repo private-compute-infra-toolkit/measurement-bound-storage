@@ -16,6 +16,10 @@
 
 package com.google.mbs.domain;
 
+/**
+ * Identifier of a cross-signed certificate, pairing the signing {@code privateKeyEpochId} with the
+ * signed {@code publicKeyEpochId}.
+ */
 public record CrossSignedCertificateId(int privateKeyEpochId, int publicKeyEpochId) {
 
   public CrossSignedCertificateId {
@@ -27,7 +31,39 @@ public record CrossSignedCertificateId(int privateKeyEpochId, int publicKeyEpoch
     }
   }
 
+  /** Returns the canonical {@code "<privateKeyEpochId>_<publicKeyEpochId>"} key representation. */
   public String toKeyString() {
     return privateKeyEpochId + "_" + publicKeyEpochId;
+  }
+
+  /**
+   * Parses a canonical {@code "<privateKeyEpochId>_<publicKeyEpochId>"} string into a {@link
+   * CrossSignedCertificateId}.
+   *
+   * @throws IllegalArgumentException if {@code keyString} is not a canonical pair of distinct
+   *     integers separated by {@code '_'}
+   */
+  public static CrossSignedCertificateId fromKeyString(String keyString) {
+    String[] parts = keyString.split("_", -1);
+    if (parts.length != 2) {
+      throw new IllegalArgumentException(
+          "Invalid CrossSignedCertificateId key string: " + keyString);
+    }
+    int privateKeyEpochId;
+    int publicKeyEpochId;
+    try {
+      privateKeyEpochId = Integer.parseInt(parts[0]);
+      publicKeyEpochId = Integer.parseInt(parts[1]);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          String.format("Non-integer epoch in cross-signed key '%s'", keyString), e);
+    }
+    CrossSignedCertificateId id = new CrossSignedCertificateId(privateKeyEpochId, publicKeyEpochId);
+    if (!id.toKeyString().equals(keyString)) {
+      throw new IllegalArgumentException(
+          String.format(
+              "Non-canonical cross-signed key '%s': expected '%s'", keyString, id.toKeyString()));
+    }
+    return id;
   }
 }

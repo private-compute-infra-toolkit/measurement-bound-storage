@@ -37,6 +37,7 @@ import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
 import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.CertificatesConfig;
 import com.google.mbs.domain.CertificatesConfigBucketProperties;
 import com.google.mbs.domain.CertificatesConfigProvider;
 import com.google.mbs.domain.KeyBackupBucketProperties;
@@ -45,9 +46,11 @@ import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.MeasurementBoundBundle;
 import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
 import com.google.mbs.domain.TrustPackageReloader;
+import com.google.mbs.domain.ValidityPeriod;
 import com.google.mbs.dummy.DummyMbsModule;
 import com.google.mbs.dummy.DummyTrustPackageProvider;
 import com.google.mbs.qualifier.AttestationUserData;
@@ -55,6 +58,10 @@ import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
 import com.google.mbs.qualifier.PrivateBackupBucket;
 import com.google.mbs.qualifier.PublicBackupBucket;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -87,8 +94,9 @@ public class MbsModuleTest {
 
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
-    generator.generateCertificates(configProvider.getCertificatesConfig());
-    reloader.reload();
+    CertificatesConfig config = configProvider.getCertificatesConfig();
+    generator.generateCertificates(config);
+    reloader.reload(config);
     TrustPackage package1 = provider.getActiveTrustPackage();
     assertNotNull(package1);
     assertEquals(1, package1.bundles().size());
@@ -96,12 +104,11 @@ public class MbsModuleTest {
     MeasurementBoundBundle mbc1 = package1.bundles().get(0);
     assertNotNull(mbc1.getCertificate());
     assertNotNull(mbc1.getPrivateKey());
-    var expectedValidity =
-        configProvider.getCertificatesConfig().selfSignedCertificates().get(0).validityPeriod();
+    var expectedValidity = config.selfSignedCertificates().get(0).validityPeriod();
     assertEquals(expectedValidity.notBefore(), mbc1.getCertificate().getNotBefore().toInstant());
     assertEquals(expectedValidity.notAfter(), mbc1.getCertificate().getNotAfter().toInstant());
 
-    reloader.reload();
+    reloader.reload(config);
     TrustPackage package2 = provider.getActiveTrustPackage();
     assertNotNull(package2);
     assertEquals(1, package2.bundles().size());
@@ -111,6 +118,34 @@ public class MbsModuleTest {
     assertNotNull(mbc2.getPrivateKey());
     assertNotEquals(
         mbc1.getCertificate().getSerialNumber(), mbc2.getCertificate().getSerialNumber());
+
+    ValidityPeriod validity0 =
+        new ValidityPeriod(
+            Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-06-01T00:00:00Z"));
+    ValidityPeriod validity2 =
+        new ValidityPeriod(
+            Instant.parse("2026-05-01T00:00:00Z"), Instant.parse("2026-10-01T00:00:00Z"));
+    CertificatesConfig multiEpochConfig =
+        new CertificatesConfig(
+            Map.of(
+                0, new SelfSignedCertificate(0, validity0),
+                2, new SelfSignedCertificate(2, validity2)),
+            Map.of(),
+            Set.of(2, 0),
+            Set.of(),
+            Set.of(0, 2));
+    reloader.reload(multiEpochConfig);
+    TrustPackage multiPackage = provider.getActiveTrustPackage();
+    assertEquals(2, multiPackage.bundles().size());
+    Set<ValidityPeriod> loadedValidities =
+        multiPackage.bundles().stream()
+            .map(
+                b ->
+                    new ValidityPeriod(
+                        b.getCertificate().getNotBefore().toInstant(),
+                        b.getCertificate().getNotAfter().toInstant()))
+            .collect(Collectors.toSet());
+    assertEquals(Set.of(validity0, validity2), loadedValidities);
 
     CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
     assertNotNull(scheduler);

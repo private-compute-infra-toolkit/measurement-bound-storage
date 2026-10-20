@@ -18,22 +18,19 @@ package com.google.mbs.domain;
 
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.Objects;
 
 /**
  * A container for an {@link X509Certificate}, corresponding {@link PrivateKey} and {@link
  * AttestationToken}.
  */
-public class MeasurementBoundBundle {
+public record MeasurementBoundBundle(
+    X509Certificate certificate, PrivateKey privateKey, AttestationToken attestationToken) {
 
-  private final X509Certificate certificate;
-  private final PrivateKey privateKey;
-  private final AttestationToken attestationToken;
-
-  public MeasurementBoundBundle(
-      X509Certificate certificate, PrivateKey privateKey, AttestationToken attestationToken) {
-    this.certificate = certificate;
-    this.privateKey = privateKey;
-    this.attestationToken = attestationToken;
+  public MeasurementBoundBundle {
+    Objects.requireNonNull(certificate);
+    Objects.requireNonNull(privateKey);
+    Objects.requireNonNull(attestationToken);
   }
 
   public X509Certificate getCertificate() {

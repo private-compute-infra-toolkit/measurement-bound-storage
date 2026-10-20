@@ -26,7 +26,6 @@ import com.google.mbs.domain.Metrics.ConfigEvent;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.Objects;
-import org.jspecify.annotations.NonNull;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
@@ -49,15 +48,13 @@ public class S3CertificatesConfigProvider implements CertificatesConfigProvider 
   @Inject
   public S3CertificatesConfigProvider(
       S3Client s3Client, CertificatesConfigBucketProperties bucketProperties, Metrics metrics) {
-    this.s3Client = Objects.requireNonNull(s3Client, "s3Client must not be null");
-    this.bucketProperties =
-        Objects.requireNonNull(bucketProperties, "bucketProperties must not be null");
-    this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    this.s3Client = Objects.requireNonNull(s3Client);
+    this.bucketProperties = Objects.requireNonNull(bucketProperties);
+    this.metrics = Objects.requireNonNull(metrics);
   }
 
   @Override
-  public @NonNull CertificatesConfig getCertificatesConfig()
-      throws InvalidCertificatesConfigException {
+  public CertificatesConfig getCertificatesConfig() throws InvalidCertificatesConfigException {
     try {
       return fetchAndParse();
     } catch (RuntimeException e) {
@@ -69,7 +66,7 @@ public class S3CertificatesConfigProvider implements CertificatesConfigProvider 
     }
   }
 
-  private @NonNull CertificatesConfig fetchAndParse() throws InvalidCertificatesConfigException {
+  private CertificatesConfig fetchAndParse() throws InvalidCertificatesConfigException {
     String bucket = bucketProperties.bucketName();
     String key = bucketProperties.configFileName();
     logger.atInfo().log(

@@ -30,7 +30,6 @@ java_library(
         "@maven//:jakarta_inject_jakarta_inject_api",
         "@maven//:org_bouncycastle_bcpkix_jdk18on",
         "@maven//:org_bouncycastle_bcprov_jdk18on",
-        "@maven//:org_jspecify_jspecify",
     ],
 )
 

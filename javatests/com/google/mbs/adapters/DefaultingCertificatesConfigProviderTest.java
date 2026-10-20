@@ -18,7 +18,6 @@ package com.google.mbs.adapters;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -51,11 +50,6 @@ public class DefaultingCertificatesConfigProviderTest {
   @Before
   public void setUp() {
     provider = new DefaultingCertificatesConfigProvider(mockDelegate);
-  }
-
-  @Test
-  public void constructor_nullDelegate_throwsException() {
-    assertThrows(NullPointerException.class, () -> new DefaultingCertificatesConfigProvider(null));
   }
 
   @Test

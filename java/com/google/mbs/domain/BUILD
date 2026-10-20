@@ -22,10 +22,15 @@ java_plugin(
     deps = ["@maven//:com_google_auto_value_auto_value"],
 )
 
+java_plugin(
+    name = "auto_builder_plugin",
+    processor_class = "com.google.auto.value.processor.AutoBuilderProcessor",
+    deps = ["@maven//:com_google_auto_value_auto_value"],
+)
+
 java_library(
     name = "domain",
     srcs = [
-        "ArtifactType.java",
         "AttestationCollector.java",
         "AttestationToken.java",
         "BackupHandle.java",
@@ -34,7 +39,9 @@ java_library(
         "CertificatesConfig.java",
         "CertificatesConfigBucketProperties.java",
         "CertificatesConfigProvider.java",
+        "CrossSignedCertHandle.java",
         "CrossSignedCertificate.java",
+        "CrossSignedCertificateBackup.java",
         "CrossSignedCertificateId.java",
         "InvalidCertificatesConfigException.java",
         "KeyBackup.java",
@@ -60,9 +67,11 @@ java_library(
         "TrustPackageReloader.java",
         "ValidityPeriod.java",
     ],
-    plugins = [":auto_value_plugin"],
+    plugins = [
+        ":auto_builder_plugin",
+        ":auto_value_plugin",
+    ],
     deps = [
         "@maven//:com_google_auto_value_auto_value_annotations",
-        "@maven//:org_jspecify_jspecify",
     ],
 )

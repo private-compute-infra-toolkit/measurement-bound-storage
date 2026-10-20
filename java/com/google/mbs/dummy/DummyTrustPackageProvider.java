@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.security.*;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,6 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.jspecify.annotations.NonNull;
 
 /** In-memory, placeholder implementation of {@link TrustPackageProvider}. */
 public class DummyTrustPackageProvider
@@ -67,19 +67,19 @@ public class DummyTrustPackageProvider
           Set.of(0));
 
   private static final SecureRandom secureRandom = new SecureRandom();
-  private volatile MeasurementBoundBundle mbc = null;
+  private volatile TrustPackage trustPackage = null;
 
   @Override
   public TrustPackage getActiveTrustPackage() {
-    MeasurementBoundBundle cert = mbc;
-    if (cert == null) {
-      throw new IllegalStateException("Measurement-bound certificate has not been initialized yet");
+    TrustPackage current = trustPackage;
+    if (current == null) {
+      throw new IllegalStateException("Trust package has not been initialized yet");
     }
-    return new TrustPackage(List.of(cert), List.of());
+    return current;
   }
 
   @Override
-  public @NonNull CertificatesConfig getCertificatesConfig() {
+  public CertificatesConfig getCertificatesConfig() {
     return DUMMY_CONFIG;
   }
 
@@ -87,15 +87,20 @@ public class DummyTrustPackageProvider
   public void generateCertificates(CertificatesConfig unused) {}
 
   @Override
-  public synchronized void reload() {
+  public synchronized void reload(CertificatesConfig config) {
     try {
-      mbc = generateNewCertificate();
+      List<MeasurementBoundBundle> bundles = new ArrayList<>();
+      for (SelfSignedCertificate certConfig : config.activeSelfSignedCertificates()) {
+        bundles.add(generateNewCertificate(certConfig.validityPeriod()));
+      }
+      trustPackage = new TrustPackage(bundles, List.of());
     } catch (Exception e) {
       throw new RuntimeException("Failed to reload certificate", e);
     }
   }
 
-  private MeasurementBoundBundle generateNewCertificate() throws Exception {
+  private MeasurementBoundBundle generateNewCertificate(ValidityPeriod validityPeriod)
+      throws Exception {
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
     keyGen.initialize(2048, secureRandom);
     KeyPair keyPair = keyGen.generateKeyPair();
@@ -104,7 +109,6 @@ public class DummyTrustPackageProvider
     PublicKey publicKey = keyPair.getPublic();
 
     BigInteger serial = new BigInteger(SERIAL_NUMBER_ENTROPY_BITS, secureRandom);
-    ValidityPeriod validityPeriod = DUMMY_CONFIG.selfSignedCertificates().get(0).validityPeriod();
     X500Name issuerAndSubject = new X500Name("CN=Standalone CA");
 
     X509v3CertificateBuilder certBuilder =

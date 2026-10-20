@@ -18,7 +18,7 @@ package com.google.mbs.adapters;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.mbs.domain.ArtifactType;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -45,12 +45,21 @@ public class S3BackupPathsTest {
   }
 
   @Test
-  public void getFileName_returnsExpectedFileNameForEachArtifactType() {
-    assertThat(S3BackupPaths.getFileName(ArtifactType.CERT)).isEqualTo("root_certificate.pem");
-    assertThat(S3BackupPaths.getFileName(ArtifactType.ATTESTATION_DOC))
+  public void getCrossSignedCertPath_returnsExpectedPath() {
+    assertThat(S3BackupPaths.getCrossSignedCertPath(new CrossSignedCertificateId(0, 1)))
+        .isEqualTo("public/cross-signed/0_1/cross_signed_certificate.pem");
+    assertThat(S3BackupPaths.getCrossSignedCertPath(new CrossSignedCertificateId(1, 0)))
+        .isEqualTo("public/cross-signed/1_0/cross_signed_certificate.pem");
+  }
+
+  @Test
+  public void getFileName_returnsExpectedFileNameForEachKeyBackupElement() {
+    assertThat(S3BackupPaths.getFileName(KeyBackupElement.CERT)).isEqualTo("root_certificate.pem");
+    assertThat(S3BackupPaths.getFileName(KeyBackupElement.ATTESTATION_DOC))
         .isEqualTo("attestation_doc.base64");
-    assertThat(S3BackupPaths.getFileName(ArtifactType.KMS_DATA_KEY)).isEqualTo("root_data_key.kms");
-    assertThat(S3BackupPaths.getFileName(ArtifactType.PRIVATE_KEY))
+    assertThat(S3BackupPaths.getFileName(KeyBackupElement.KMS_DATA_KEY))
+        .isEqualTo("root_data_key.kms");
+    assertThat(S3BackupPaths.getFileName(KeyBackupElement.PRIVATE_KEY))
         .isEqualTo("root_private_key.aes");
   }
 }

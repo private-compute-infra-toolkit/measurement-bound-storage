@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.12.0 (2026-10-20)
+
+
+### Features
+
+* add S3 backup storage support for cross-signed certs
+* Generate self-signed certificates from CertificatesConfig
+* Load active certificates from CertificatesConfig in TrustPackage
+* load active cross-signed certificates into TrustPackage
+
 ## 0.11.0 (2026-10-12)
 
 

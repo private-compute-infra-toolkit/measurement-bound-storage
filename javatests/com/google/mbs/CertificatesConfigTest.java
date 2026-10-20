@@ -59,14 +59,6 @@ public class CertificatesConfigTest {
   }
 
   @Test
-  public void validityPeriod_nullNotBeforeOrNotAfter_throwsNullPointerException() {
-    assertThrows(
-        NullPointerException.class, () -> new ValidityPeriod(null, Instant.ofEpochSecond(200)));
-    assertThrows(
-        NullPointerException.class, () -> new ValidityPeriod(Instant.ofEpochSecond(100), null));
-  }
-
-  @Test
   public void validityPeriod_isValidAt_validatesBoundaries() {
     Instant notBefore = Instant.ofEpochSecond(1000);
     Instant notAfter = Instant.ofEpochSecond(2000);
@@ -85,16 +77,6 @@ public class CertificatesConfigTest {
     SelfSignedCertificate cert = new SelfSignedCertificate(0, vp);
     assertThat(cert.epochId()).isEqualTo(0);
     assertThat(cert.validityPeriod()).isEqualTo(vp);
-  }
-
-  @Test
-  public void selfSignedCertificate_nullValidityPeriod_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> new SelfSignedCertificate(1, null));
-  }
-
-  @Test
-  public void crossSignedCertificate_nullValidityPeriod_throwsNullPointerException() {
-    assertThrows(NullPointerException.class, () -> new CrossSignedCertificate(1, 2, null));
   }
 
   @Test
@@ -118,22 +100,103 @@ public class CertificatesConfigTest {
   }
 
   @Test
-  public void certificatesConfig_nullConstructorComponents_throwsNullPointerException() {
+  public void crossSignedCertificateId_fromKeyString_validString_returnsId() {
+    CrossSignedCertificateId id01 = CrossSignedCertificateId.fromKeyString("0_1");
+    assertThat(id01).isEqualTo(new CrossSignedCertificateId(0, 1));
+    assertThat(CrossSignedCertificateId.fromKeyString(id01.toKeyString())).isEqualTo(id01);
+
+    CrossSignedCertificateId id102 = CrossSignedCertificateId.fromKeyString("10_2");
+    assertThat(id102).isEqualTo(new CrossSignedCertificateId(10, 2));
+  }
+
+  @Test
+  public void
+      crossSignedCertificateId_fromKeyString_invalidFormat_throwsIllegalArgumentException() {
+    assertThrows(IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString(""));
+    assertThrows(IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0"));
     assertThrows(
-        NullPointerException.class,
-        () -> new CertificatesConfig(null, Map.of(), Set.of(), Set.of(), Set.of()));
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0_1_2"));
     assertThrows(
-        NullPointerException.class,
-        () -> new CertificatesConfig(Map.of(), null, Set.of(), Set.of(), Set.of()));
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("a_1"));
     assertThrows(
-        NullPointerException.class,
-        () -> new CertificatesConfig(Map.of(), Map.of(), null, Set.of(), Set.of()));
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0_b"));
     assertThrows(
-        NullPointerException.class,
-        () -> new CertificatesConfig(Map.of(), Map.of(), Set.of(), null, Set.of()));
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("_1"));
     assertThrows(
-        NullPointerException.class,
-        () -> new CertificatesConfig(Map.of(), Map.of(), Set.of(), Set.of(), null));
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0_"));
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("1_1"));
+
+    // Non-canonical integer representations must be rejected so distinct strings cannot map to the
+    // same CrossSignedCertificateId.
+    IllegalArgumentException nonCanonical =
+        assertThrows(
+            IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("00_1"));
+    assertThat(nonCanonical).hasMessageThat().contains("Non-canonical cross-signed key");
+
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0_01"));
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("+0_1"));
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("0_+1"));
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("-0_1"));
+    assertThrows(
+        IllegalArgumentException.class, () -> CrossSignedCertificateId.fromKeyString("-01_2"));
+  }
+
+  @Test
+  public void certificatesConfig_emptyActiveSelfSignedCertificateIds_throwsException() {
+    ValidityPeriod vp = new ValidityPeriod(Instant.ofEpochSecond(100), Instant.ofEpochSecond(200));
+    SelfSignedCertificate self1 = new SelfSignedCertificate(1, vp);
+
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new CertificatesConfig(Map.of(1, self1), Map.of(), Set.of(), Set.of(), Set.of(1)));
+    assertThat(e).hasMessageThat().contains("activeSelfSignedCertificateIds must not be empty");
+  }
+
+  @Test
+  public void certificatesConfig_activeSelfSignedCertificates_returnsActiveCertificates() {
+    ValidityPeriod vp = new ValidityPeriod(Instant.ofEpochSecond(100), Instant.ofEpochSecond(200));
+    SelfSignedCertificate self0 = new SelfSignedCertificate(0, vp);
+    SelfSignedCertificate self1 = new SelfSignedCertificate(1, vp);
+    SelfSignedCertificate self2 = new SelfSignedCertificate(2, vp);
+
+    CertificatesConfig config =
+        new CertificatesConfig(
+            Map.of(0, self0, 1, self1, 2, self2),
+            Map.of(),
+            Set.of(2, 0),
+            Set.of(),
+            Set.of(0, 1, 2));
+
+    assertThat(config.activeSelfSignedCertificates()).containsExactly(self0, self2);
+  }
+
+  @Test
+  public void certificatesConfig_activeCrossSignedCertificates_returnsActiveCertificates() {
+    ValidityPeriod vp = new ValidityPeriod(Instant.ofEpochSecond(100), Instant.ofEpochSecond(200));
+    SelfSignedCertificate self0 = new SelfSignedCertificate(0, vp);
+    SelfSignedCertificate self1 = new SelfSignedCertificate(1, vp);
+    SelfSignedCertificate self2 = new SelfSignedCertificate(2, vp);
+    CrossSignedCertificate cross01 = new CrossSignedCertificate(0, 1, vp);
+    CrossSignedCertificate cross10 = new CrossSignedCertificate(1, 0, vp);
+    CrossSignedCertificate cross12 = new CrossSignedCertificate(1, 2, vp);
+
+    CertificatesConfig config =
+        CertificatesConfig.builder()
+            .setSelfSignedCertificates(Map.of(0, self0, 1, self1, 2, self2))
+            .setCrossSignedCertificates(
+                Map.of(cross01.id(), cross01, cross10.id(), cross10, cross12.id(), cross12))
+            .setActiveSelfSignedCertificateIds(Set.of(0, 1))
+            .setActiveCrossSignedCertificateIds(Set.of(cross12.id(), cross01.id()))
+            .build();
+
+    assertThat(config.activeCrossSignedCertificates()).containsExactly(cross01, cross12);
   }
 
   @Test
@@ -146,7 +209,7 @@ public class CertificatesConfigTest {
     // Map key mismatch for self-signed
     assertThrows(
         IllegalArgumentException.class,
-        () -> new CertificatesConfig(Map.of(2, self1), Map.of(), Set.of(), Set.of(), Set.of()));
+        () -> new CertificatesConfig(Map.of(2, self1), Map.of(), Set.of(2), Set.of(), Set.of()));
 
     // Map key mismatch for cross-signed
     assertThrows(
@@ -155,7 +218,7 @@ public class CertificatesConfigTest {
             new CertificatesConfig(
                 Map.of(1, self1, 2, self2),
                 Map.of(new CrossSignedCertificateId(99, 100), cross12),
-                Set.of(),
+                Set.of(1),
                 Set.of(),
                 Set.of()));
 
@@ -164,14 +227,14 @@ public class CertificatesConfigTest {
         IllegalArgumentException.class,
         () ->
             new CertificatesConfig(
-                Map.of(2, self2), Map.of(cross12.id(), cross12), Set.of(), Set.of(), Set.of()));
+                Map.of(2, self2), Map.of(cross12.id(), cross12), Set.of(2), Set.of(), Set.of()));
 
     // Cross-cert referencing missing public key in inventory
     assertThrows(
         IllegalArgumentException.class,
         () ->
             new CertificatesConfig(
-                Map.of(1, self1), Map.of(cross12.id(), cross12), Set.of(), Set.of(), Set.of()));
+                Map.of(1, self1), Map.of(cross12.id(), cross12), Set.of(1), Set.of(), Set.of()));
   }
 
   @Test
@@ -190,7 +253,8 @@ public class CertificatesConfigTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new CertificatesConfig(Map.of(1, self1), Map.of(), Set.of(), Set.of(), Set.of(99)));
+                new CertificatesConfig(
+                    Map.of(1, self1), Map.of(), Set.of(1), Set.of(), Set.of(99)));
     assertThat(eAcceptable).hasMessageThat().contains("key 99");
 
     IllegalArgumentException eCross =
@@ -200,7 +264,7 @@ public class CertificatesConfigTest {
                 new CertificatesConfig(
                     Map.of(1, self1),
                     Map.of(),
-                    Set.of(),
+                    Set.of(1),
                     Set.of(new CrossSignedCertificateId(1, 2)),
                     Set.of()));
     assertThat(eCross).hasMessageThat().contains("certificate ID '1_2'");

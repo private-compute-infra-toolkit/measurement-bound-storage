@@ -16,8 +16,6 @@
 
 package com.google.mbs.domain;
 
-import org.jspecify.annotations.NonNull;
-
 /** Storage port for storing and retrieving MBS certificate, key, and attestation artifacts. */
 public interface KeyBackupStorage {
 
@@ -36,5 +34,5 @@ public interface KeyBackupStorage {
    */
   void releaseLock() throws KeyBackupAccessFailedException;
 
-  @NonNull StorageSnapshot getSnapshot() throws KeyBackupAccessFailedException;
+  StorageSnapshot getSnapshot() throws KeyBackupAccessFailedException;
 }

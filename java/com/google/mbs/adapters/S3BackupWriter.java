@@ -17,6 +17,8 @@
 package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
+import com.google.mbs.domain.CrossSignedCertificateBackup;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupAlreadyExistsException;
@@ -27,6 +29,7 @@ import com.google.mbs.qualifier.InstanceId;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -53,9 +56,9 @@ public class S3BackupWriter {
       S3Client s3Client,
       KeyBackupBucketProperties bucketProperties,
       @InstanceId String instanceId) {
-    this.s3Client = s3Client;
-    this.bucketProperties = bucketProperties;
-    this.instanceId = instanceId;
+    this.s3Client = Objects.requireNonNull(s3Client);
+    this.bucketProperties = Objects.requireNonNull(bucketProperties);
+    this.instanceId = Objects.requireNonNull(instanceId);
   }
 
   /**
@@ -127,6 +130,23 @@ public class S3BackupWriter {
         S3BackupPaths.getRootCertPath(epoch),
         keyBackup.certBytes());
     logger.atInfo().log("Successfully wrote backup artifacts to S3 for epoch %d", epoch);
+  }
+
+  /**
+   * Writes the cross-signed certificate for {@code id}.
+   *
+   * @throws KeyBackupAlreadyExistsException if the certificate for {@code id} already exists
+   * @throws KeyBackupAccessFailedException if the certificate could not be written
+   */
+  public void writeCrossSignedCert(CrossSignedCertificateId id, CrossSignedCertificateBackup backup)
+      throws KeyBackupStorageException {
+    logger.atInfo().log("Writing cross-signed certificate to S3 for %s", id.toKeyString());
+    putS3Object(
+        bucketProperties.getPublicBucketName(),
+        S3BackupPaths.getCrossSignedCertPath(id),
+        backup.certBytes());
+    logger.atInfo().log(
+        "Successfully wrote cross-signed certificate to S3 for %s", id.toKeyString());
   }
 
   static boolean isPreconditionFailed(S3Exception e) {

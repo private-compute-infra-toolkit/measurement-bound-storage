@@ -26,7 +26,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.jspecify.annotations.NonNull;
 
 /**
  * Decorates a {@link CertificatesConfigProvider}, falling back to a hardcoded epoch-0 config when
@@ -57,11 +56,11 @@ public class DefaultingCertificatesConfigProvider implements CertificatesConfigP
   private final CertificatesConfigProvider delegate;
 
   public DefaultingCertificatesConfigProvider(CertificatesConfigProvider delegate) {
-    this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
+    this.delegate = Objects.requireNonNull(delegate);
   }
 
   @Override
-  public @NonNull CertificatesConfig getCertificatesConfig() {
+  public CertificatesConfig getCertificatesConfig() {
     try {
       return delegate.getCertificatesConfig();
     } catch (Exception e) {

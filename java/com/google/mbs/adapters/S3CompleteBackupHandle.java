@@ -17,12 +17,11 @@
 package com.google.mbs.adapters;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.mbs.domain.ArtifactType;
 import com.google.mbs.domain.BackupHandle;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupStorageException;
 import java.util.Map;
-import org.jspecify.annotations.NonNull;
+import java.util.Objects;
 
 /**
  * S3 implementation of {@link BackupHandle.Complete} that lazily reads backup artifacts from S3 on
@@ -32,14 +31,14 @@ final class S3CompleteBackupHandle implements BackupHandle.Complete {
 
   private final int epoch;
   private final S3BackupReader reader;
-  private final ImmutableMap<ArtifactType, String> artifactEtags;
+  private final ImmutableMap<KeyBackupElement, String> elementETags;
   private KeyBackup cachedBackup;
 
   S3CompleteBackupHandle(
-      int epoch, S3BackupReader reader, Map<ArtifactType, String> artifactEtags) {
+      int epoch, S3BackupReader reader, Map<KeyBackupElement, String> elementETags) {
     this.epoch = epoch;
-    this.reader = reader;
-    this.artifactEtags = ImmutableMap.copyOf(artifactEtags);
+    this.reader = Objects.requireNonNull(reader);
+    this.elementETags = ImmutableMap.copyOf(elementETags);
   }
 
   @Override
@@ -47,12 +46,12 @@ final class S3CompleteBackupHandle implements BackupHandle.Complete {
     return epoch;
   }
 
-  ImmutableMap<ArtifactType, String> artifactEtags() {
-    return artifactEtags;
+  ImmutableMap<KeyBackupElement, String> elementETags() {
+    return elementETags;
   }
 
   @Override
-  public synchronized @NonNull KeyBackup read() throws KeyBackupStorageException {
+  public synchronized KeyBackup read() throws KeyBackupStorageException {
     if (cachedBackup == null) {
       cachedBackup = reader.read(epoch);
     }

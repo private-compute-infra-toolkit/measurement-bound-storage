@@ -28,6 +28,7 @@ import com.google.mbs.domain.TrustPackageReloader;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -52,10 +53,10 @@ public class MeasurementBoundCertificateMonitor extends AbstractScheduledService
       TrustPackageReloader reloader,
       CertificatesConfigProvider certificatesConfigProvider,
       Metrics metrics) {
-    this.generator = generator;
-    this.reloader = reloader;
-    this.certificatesConfigProvider = certificatesConfigProvider;
-    this.metrics = metrics;
+    this.generator = Objects.requireNonNull(generator);
+    this.reloader = Objects.requireNonNull(reloader);
+    this.certificatesConfigProvider = Objects.requireNonNull(certificatesConfigProvider);
+    this.metrics = Objects.requireNonNull(metrics);
   }
 
   @Override
@@ -73,8 +74,7 @@ public class MeasurementBoundCertificateMonitor extends AbstractScheduledService
   public void runOneIteration() {
     Optional<CertificatesConfig> config = fetchConfig();
     boolean generationSucceeded = config.isPresent() && generate(config.get());
-    // TODO: make reload depend on config, execute only when fetched
-    boolean reloadSucceeded = reload();
+    boolean reloadSucceeded = config.isPresent() && reload(config.get());
 
     Metrics.MbsEvent result =
         generationSucceeded && reloadSucceeded
@@ -105,9 +105,9 @@ public class MeasurementBoundCertificateMonitor extends AbstractScheduledService
     }
   }
 
-  private boolean reload() {
+  private boolean reload(CertificatesConfig config) {
     try {
-      reloader.reload();
+      reloader.reload(config);
       return true;
     } catch (Exception e) {
       Thread.interrupted();

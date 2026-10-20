@@ -16,8 +16,8 @@
 
 package com.google.mbs;
 
-import com.google.common.base.Preconditions;
 import com.google.inject.AbstractModule;
+import java.util.Objects;
 
 /** Guice module encapsulating AWS KMS and Nitro Attestation-backed Measurement Bound Storage. */
 public final class MbsModule extends AbstractModule {
@@ -25,7 +25,7 @@ public final class MbsModule extends AbstractModule {
 
   /** Creates an MBS module configured for remote execution backed by AWS KMS and S3 storage. */
   public MbsModule(String awsRegion) {
-    this.awsRegion = Preconditions.checkNotNull(awsRegion, "awsRegion cannot be null");
+    this.awsRegion = Objects.requireNonNull(awsRegion);
   }
 
   @Override

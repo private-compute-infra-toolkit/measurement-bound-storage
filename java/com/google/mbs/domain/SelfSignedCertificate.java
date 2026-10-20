@@ -19,8 +19,7 @@ package com.google.mbs.domain;
 import java.util.Objects;
 
 public record SelfSignedCertificate(int epochId, ValidityPeriod validityPeriod) {
-
   public SelfSignedCertificate {
-    Objects.requireNonNull(validityPeriod, "validityPeriod must not be null");
+    Objects.requireNonNull(validityPeriod);
   }
 }

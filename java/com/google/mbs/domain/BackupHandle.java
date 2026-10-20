@@ -17,7 +17,6 @@
 package com.google.mbs.domain;
 
 import java.util.List;
-import org.jspecify.annotations.NonNull;
 
 /**
  * Observed state of the backup of a single epoch, and the operations that state permits.
@@ -49,7 +48,7 @@ public sealed interface BackupHandle
   }
 
   /** Returns the exception reporting this state to a caller that needed a different one. */
-  @NonNull KeyBackupStorageException asException();
+  KeyBackupStorageException asException();
 
   /** All backup artifacts exist for {@link #epoch()}, so the backup can be read. */
   non-sealed interface Complete extends BackupHandle {
@@ -60,10 +59,10 @@ public sealed interface BackupHandle
      * @throws KeyBackupStorageException if the artifacts could not be read or no longer form a
      *     complete backup
      */
-    @NonNull KeyBackup read() throws KeyBackupStorageException;
+    KeyBackup read() throws KeyBackupStorageException;
 
     @Override
-    default @NonNull KeyBackupAlreadyExistsException asException() {
+    default KeyBackupAlreadyExistsException asException() {
       return new KeyBackupAlreadyExistsException(
           "Key backup already complete for epoch " + epoch());
     }
@@ -80,7 +79,7 @@ public sealed interface BackupHandle
     void write(KeyBackup keyBackup) throws KeyBackupStorageException;
 
     @Override
-    default @NonNull KeyBackupStorageException asException() {
+    default KeyBackupStorageException asException() {
       return new KeyBackupNotFoundException("Key backup absent for epoch " + epoch());
     }
   }
@@ -91,8 +90,12 @@ public sealed interface BackupHandle
    */
   record PartiallyWritten(int epoch, List<String> missingKeys) implements BackupHandle {
 
+    public PartiallyWritten {
+      missingKeys = List.copyOf(missingKeys);
+    }
+
     @Override
-    public @NonNull KeyBackupStorageException asException() {
+    public KeyBackupStorageException asException() {
       return new KeyBackupPartiallyWrittenException(
           "Key backup partially written for epoch " + epoch + ", missing " + missingKeys);
     }
@@ -103,8 +106,12 @@ public sealed interface BackupHandle
    */
   record Incomplete(int epoch, List<String> missingKeys) implements BackupHandle {
 
+    public Incomplete {
+      missingKeys = List.copyOf(missingKeys);
+    }
+
     @Override
-    public @NonNull KeyBackupStorageException asException() {
+    public KeyBackupStorageException asException() {
       return new KeyBackupIncompleteException(
           "Key backup incomplete for epoch " + epoch + ", missing " + missingKeys);
     }

@@ -17,10 +17,10 @@
 package com.google.mbs.domain;
 
 import java.util.Map;
-import org.jspecify.annotations.NonNull;
 
 /**
- * Point-in-time view of backup storage, keyed by epoch.
+ * Point-in-time view of backup storage, keyed by epoch for self-signed key backups and by {@link
+ * CrossSignedCertificateId} for cross-signed certificates.
  *
  * <p>A snapshot is not refreshed by operations performed on the handles it returns; obtain a new
  * snapshot from {@link KeyBackupStorage#getSnapshot()} to observe later changes.
@@ -31,8 +31,20 @@ public interface StorageSnapshot {
    * Returns the handle for {@code epoch}, or a {@link BackupHandle.Empty} if nothing was stored for
    * it when the snapshot was taken.
    */
-  @NonNull BackupHandle getBundleHandle(int epoch);
+  BackupHandle getBundleHandle(int epoch);
 
   /** Returns the handles of the epochs present in storage when the snapshot was taken. */
-  @NonNull Map<Integer, BackupHandle> bundleHandles();
+  Map<Integer, BackupHandle> bundleHandles();
+
+  /**
+   * Returns the handle for the cross-signed certificate {@code id}, or a {@link
+   * CrossSignedCertHandle.Empty} if nothing was stored for it when the snapshot was taken.
+   */
+  CrossSignedCertHandle getCrossSignedCertHandle(CrossSignedCertificateId id);
+
+  /**
+   * Returns the handles of the cross-signed certificates present in storage when the snapshot was
+   * taken.
+   */
+  Map<CrossSignedCertificateId, CrossSignedCertHandle> crossSignedCertHandles();
 }

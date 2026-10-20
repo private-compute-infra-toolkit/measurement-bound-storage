@@ -27,6 +27,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
 import java.security.Security;
+import java.util.Objects;
 import java.util.Optional;
 import org.bouncycastle.cms.CMSEnvelopedData;
 import org.bouncycastle.cms.RecipientInformation;
@@ -60,8 +61,8 @@ public class AwsKmsClient implements KmsClientInterface {
 
   @Inject
   public AwsKmsClient(KmsClient kmsClient, NitroSecurityModuleFactory nsmFactory) {
-    this.kmsClient = kmsClient;
-    this.nsmFactory = nsmFactory;
+    this.kmsClient = Objects.requireNonNull(kmsClient);
+    this.nsmFactory = Objects.requireNonNull(nsmFactory);
   }
 
   protected KeyPair generateEphemeralKeyPair() {

@@ -23,6 +23,7 @@ java_test(
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/domain",
+        "//javatests/com/google/mbs/testing",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
@@ -39,7 +40,6 @@ java_test(
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/domain",
-        "@maven//:com_google_code_gson_gson",
         "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
@@ -105,6 +105,8 @@ java_test(
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
         "//javatests/com/google/mbs/testing",
+        "//proto:certificates_config_java_proto",
+        "@com_google_protobuf//:protobuf_java",
         "@maven//:com_google_inject_extensions_guice_testlib",
         "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
@@ -141,6 +143,17 @@ java_test(
         "@maven//:com_google_truth_truth",
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "CrossSignedCertHandleTest",
+    size = "small",
+    srcs = ["CrossSignedCertHandleTest.java"],
+    deps = [
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
     ],
 )
 

@@ -16,41 +16,25 @@
 
 package com.google.mbs.domain;
 
+import com.google.auto.value.AutoBuilder;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import org.jspecify.annotations.NonNull;
 
 public record CertificatesConfig(
-    @NonNull Map<Integer, SelfSignedCertificate> selfSignedCertificates,
-    @NonNull Map<CrossSignedCertificateId, CrossSignedCertificate> crossSignedCertificates,
-    @NonNull Set<Integer> activeSelfSignedCertificateIds,
-    @NonNull Set<CrossSignedCertificateId> activeCrossSignedCertificateIds,
-    @NonNull Set<Integer> acceptableSelfSignedCertificateIds) {
+    Map<Integer, SelfSignedCertificate> selfSignedCertificates,
+    Map<CrossSignedCertificateId, CrossSignedCertificate> crossSignedCertificates,
+    Set<Integer> activeSelfSignedCertificateIds,
+    Set<CrossSignedCertificateId> activeCrossSignedCertificateIds,
+    Set<Integer> acceptableSelfSignedCertificateIds) {
 
   public CertificatesConfig {
-    selfSignedCertificates =
-        Map.copyOf(
-            Objects.requireNonNull(
-                selfSignedCertificates, "selfSignedCertificates must not be null"));
-    crossSignedCertificates =
-        Map.copyOf(
-            Objects.requireNonNull(
-                crossSignedCertificates, "crossSignedCertificates must not be null"));
-    activeSelfSignedCertificateIds =
-        Set.copyOf(
-            Objects.requireNonNull(
-                activeSelfSignedCertificateIds, "activeSelfSignedCertificateIds must not be null"));
-    activeCrossSignedCertificateIds =
-        Set.copyOf(
-            Objects.requireNonNull(
-                activeCrossSignedCertificateIds,
-                "activeCrossSignedCertificateIds must not be null"));
-    acceptableSelfSignedCertificateIds =
-        Set.copyOf(
-            Objects.requireNonNull(
-                acceptableSelfSignedCertificateIds,
-                "acceptableSelfSignedCertificateIds must not be null"));
+    selfSignedCertificates = Map.copyOf(selfSignedCertificates);
+    crossSignedCertificates = Map.copyOf(crossSignedCertificates);
+    activeSelfSignedCertificateIds = Set.copyOf(activeSelfSignedCertificateIds);
+    activeCrossSignedCertificateIds = Set.copyOf(activeCrossSignedCertificateIds);
+    acceptableSelfSignedCertificateIds = Set.copyOf(acceptableSelfSignedCertificateIds);
 
     selfSignedCertificates.forEach(
         (epochId, cert) -> {
@@ -90,6 +74,10 @@ public record CertificatesConfig(
       }
     }
 
+    if (activeSelfSignedCertificateIds.isEmpty()) {
+      throw new IllegalArgumentException("activeSelfSignedCertificateIds must not be empty");
+    }
+
     validateKeysExist(
         activeSelfSignedCertificateIds,
         selfSignedCertificates,
@@ -108,6 +96,61 @@ public record CertificatesConfig(
         "activeCrossSignedCertificateIds",
         "certificate ID",
         "crossSignedCertificates");
+  }
+
+  /** Returns all configured {@link SelfSignedCertificate}s ordered by ascending epoch ID. */
+  public List<SelfSignedCertificate> getSelfSignedCertificates() {
+    return selfSignedCertificates.values().stream()
+        .sorted(Comparator.comparingInt(SelfSignedCertificate::epochId))
+        .toList();
+  }
+
+  /** Returns active {@link SelfSignedCertificate}s ordered by ascending epoch ID. */
+  public List<SelfSignedCertificate> activeSelfSignedCertificates() {
+    return activeSelfSignedCertificateIds.stream()
+        .sorted()
+        .map(selfSignedCertificates::get)
+        .toList();
+  }
+
+  /**
+   * Returns active {@link CrossSignedCertificate}s ordered by ascending {@link
+   * CrossSignedCertificateId}.
+   */
+  public List<CrossSignedCertificate> activeCrossSignedCertificates() {
+    return activeCrossSignedCertificateIds.stream()
+        .sorted(
+            Comparator.comparingInt(CrossSignedCertificateId::privateKeyEpochId)
+                .thenComparingInt(CrossSignedCertificateId::publicKeyEpochId))
+        .map(crossSignedCertificates::get)
+        .toList();
+  }
+
+  public static Builder builder() {
+    return new AutoBuilder_CertificatesConfig_Builder()
+        .setSelfSignedCertificates(Map.of())
+        .setCrossSignedCertificates(Map.of())
+        .setActiveSelfSignedCertificateIds(Set.of())
+        .setActiveCrossSignedCertificateIds(Set.of())
+        .setAcceptableSelfSignedCertificateIds(Set.of());
+  }
+
+  /** Builder for {@link CertificatesConfig}. */
+  @AutoBuilder
+  public interface Builder {
+    Builder setSelfSignedCertificates(Map<Integer, SelfSignedCertificate> selfSignedCertificates);
+
+    Builder setCrossSignedCertificates(
+        Map<CrossSignedCertificateId, CrossSignedCertificate> crossSignedCertificates);
+
+    Builder setActiveSelfSignedCertificateIds(Set<Integer> activeSelfSignedCertificateIds);
+
+    Builder setActiveCrossSignedCertificateIds(
+        Set<CrossSignedCertificateId> activeCrossSignedCertificateIds);
+
+    Builder setAcceptableSelfSignedCertificateIds(Set<Integer> acceptableSelfSignedCertificateIds);
+
+    CertificatesConfig build();
   }
 
   private static <T> void validateKeysExist(

@@ -17,17 +17,33 @@
 package com.google.mbs.adapters;
 
 import com.google.mbs.domain.BackupHandle;
+import com.google.mbs.domain.CrossSignedCertHandle;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.StorageSnapshot;
 import java.util.Map;
-import org.jspecify.annotations.NonNull;
+import java.util.Objects;
 
 record S3StorageSnapshot(
-    @NonNull Map<Integer, BackupHandle> bundleHandles, @NonNull S3BackupWriter writer)
+    Map<Integer, BackupHandle> bundleHandles,
+    Map<CrossSignedCertificateId, CrossSignedCertHandle> crossSignedCertHandles,
+    S3BackupWriter writer)
     implements StorageSnapshot {
 
+  S3StorageSnapshot {
+    Objects.requireNonNull(bundleHandles);
+    Objects.requireNonNull(crossSignedCertHandles);
+    Objects.requireNonNull(writer);
+  }
+
   @Override
-  public @NonNull BackupHandle getBundleHandle(int epoch) {
+  public BackupHandle getBundleHandle(int epoch) {
     BackupHandle handle = bundleHandles.get(epoch);
     return handle != null ? handle : new S3EmptyBackupHandle(epoch, writer);
+  }
+
+  @Override
+  public CrossSignedCertHandle getCrossSignedCertHandle(CrossSignedCertificateId id) {
+    CrossSignedCertHandle handle = crossSignedCertHandles.get(id);
+    return handle != null ? handle : new S3EmptyCrossSignedCertHandle(id, writer);
   }
 }

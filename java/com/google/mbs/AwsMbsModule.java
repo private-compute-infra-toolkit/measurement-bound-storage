@@ -16,7 +16,6 @@
 
 package com.google.mbs;
 
-import com.google.common.base.Preconditions;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Singleton;
@@ -26,6 +25,7 @@ import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
 import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.KmsClientInterface;
+import java.util.Objects;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kms.KmsClient;
@@ -36,7 +36,7 @@ public class AwsMbsModule extends AbstractModule {
   private final String awsRegion;
 
   public AwsMbsModule(String awsRegion) {
-    this.awsRegion = Preconditions.checkNotNull(awsRegion, "awsRegion cannot be null");
+    this.awsRegion = Objects.requireNonNull(awsRegion);
   }
 
   @Override

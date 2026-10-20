@@ -17,6 +17,7 @@
 package com.google.mbs;
 
 import com.google.mbs.domain.KeyBackupBucketProperties;
+import java.util.Objects;
 
 public class KeyBackupBucketPropertiesFactory {
 
@@ -26,8 +27,8 @@ public class KeyBackupBucketPropertiesFactory {
   private final String privateBucketName;
 
   public KeyBackupBucketPropertiesFactory(String publicBucketName, String privateBucketName) {
-    this.publicBucketName = publicBucketName;
-    this.privateBucketName = privateBucketName;
+    this.publicBucketName = Objects.requireNonNull(publicBucketName);
+    this.privateBucketName = Objects.requireNonNull(privateBucketName);
   }
 
   /**

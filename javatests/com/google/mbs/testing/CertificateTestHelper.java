@@ -14,11 +14,18 @@
  * limitations under the License.
  */
 
-package com.google.mbs.domain;
+package com.google.mbs.testing;
 
-public enum ArtifactType {
-  CERT,
-  ATTESTATION_DOC,
-  KMS_DATA_KEY,
-  PRIVATE_KEY
+import java.io.ByteArrayInputStream;
+import java.security.GeneralSecurityException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+
+public final class CertificateTestHelper {
+  private CertificateTestHelper() {}
+
+  public static X509Certificate parseCertificate(byte[] certBytes) throws GeneralSecurityException {
+    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+    return (X509Certificate) cf.generateCertificate(new ByteArrayInputStream(certBytes));
+  }
 }

@@ -26,6 +26,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.mbs.KeyBackupBucketPropertiesFactory;
+import com.google.mbs.domain.CrossSignedCertificateBackup;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupAlreadyExistsException;
@@ -59,8 +61,12 @@ public class S3BackupWriterTest {
   private static final String PRIVATE_BUCKET = "private-bucket";
   private static final String TEST_INSTANCE_ID = "i-testinstance123";
   private static final int TEST_EPOCH = 0;
+  private static final CrossSignedCertificateId TEST_CROSS_SIGNED_ID =
+      new CrossSignedCertificateId(0, 1);
 
   private static final byte[] CERT_BYTES = "cert-bytes".getBytes(StandardCharsets.UTF_8);
+  private static final byte[] CROSS_SIGNED_CERT_BYTES =
+      "cross-signed-cert-bytes".getBytes(StandardCharsets.UTF_8);
   private static final byte[] KMS_ENCRYPTED_DATA_KEY_BYTES =
       "kms-encrypted-data-key-bytes".getBytes(StandardCharsets.UTF_8);
   private static final byte[] AEAD_ENCRYPTED_PRIVATE_KEY_BYTES =
@@ -164,6 +170,49 @@ public class S3BackupWriterTest {
 
     assertThrows(
         KeyBackupAccessFailedException.class, () -> writer.write(TEST_EPOCH, sampleKeyBackup()));
+  }
+
+  @Test
+  public void writeCrossSignedCert_writesToPublicBucketWithExpectedHeaders() throws Exception {
+    writer.writeCrossSignedCert(
+        TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES));
+
+    ArgumentCaptor<PutObjectRequest> requestCaptor =
+        ArgumentCaptor.forClass(PutObjectRequest.class);
+    ArgumentCaptor<RequestBody> bodyCaptor = ArgumentCaptor.forClass(RequestBody.class);
+    verify(s3Client).putObject(requestCaptor.capture(), bodyCaptor.capture());
+
+    String expectedKey = S3BackupPaths.getCrossSignedCertPath(TEST_CROSS_SIGNED_ID);
+    Map<String, PutObjectRequest> requestsByKey =
+        Map.of(requestCaptor.getValue().key(), requestCaptor.getValue());
+    Map<String, byte[]> contentsByKey =
+        Map.of(requestCaptor.getValue().key(), readContent(bodyCaptor.getValue()));
+
+    assertPut(requestsByKey, contentsByKey, expectedKey, PUBLIC_BUCKET, CROSS_SIGNED_CERT_BYTES);
+  }
+
+  @Test
+  public void writeCrossSignedCert_alreadyExists_throwsAlreadyExistsException() {
+    when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+        .thenThrow(S3Exception.builder().statusCode(412).message("PreconditionFailed").build());
+
+    assertThrows(
+        KeyBackupAlreadyExistsException.class,
+        () ->
+            writer.writeCrossSignedCert(
+                TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES)));
+  }
+
+  @Test
+  public void writeCrossSignedCert_sdkException_throwsAccessFailed() {
+    when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+        .thenThrow(SdkClientException.create("S3 write failure"));
+
+    assertThrows(
+        KeyBackupAccessFailedException.class,
+        () ->
+            writer.writeCrossSignedCert(
+                TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES)));
   }
 
   @Test

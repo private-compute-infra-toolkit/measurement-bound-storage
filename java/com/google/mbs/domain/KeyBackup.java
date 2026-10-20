@@ -19,11 +19,26 @@ package com.google.mbs.domain;
 import java.util.Arrays;
 import java.util.Objects;
 
+/**
+ * Raw byte representation of a self-signed epoch key backup stored in backup storage.
+ *
+ * @param certBytes PEM-encoded X.509 certificate bytes
+ * @param kmsEncryptedDataKey KMS-encrypted AES data key bytes
+ * @param aeadEncryptedPrivateKey AEAD-encrypted PKCS#8 private key bytes
+ * @param attestationDocBytes raw attestation document bytes bound to the public key
+ */
 public record KeyBackup(
     byte[] certBytes,
     byte[] kmsEncryptedDataKey,
     byte[] aeadEncryptedPrivateKey,
     byte[] attestationDocBytes) {
+
+  public KeyBackup {
+    Objects.requireNonNull(certBytes);
+    Objects.requireNonNull(kmsEncryptedDataKey);
+    Objects.requireNonNull(aeadEncryptedPrivateKey);
+    Objects.requireNonNull(attestationDocBytes);
+  }
 
   @Override
   public boolean equals(Object o) {
@@ -46,5 +61,18 @@ public record KeyBackup(
         Arrays.hashCode(kmsEncryptedDataKey),
         Arrays.hashCode(aeadEncryptedPrivateKey),
         Arrays.hashCode(attestationDocBytes));
+  }
+
+  @Override
+  public String toString() {
+    return "KeyBackup[certBytes="
+        + Arrays.toString(certBytes)
+        + ", kmsEncryptedDataKey="
+        + Arrays.toString(kmsEncryptedDataKey)
+        + ", aeadEncryptedPrivateKey="
+        + Arrays.toString(aeadEncryptedPrivateKey)
+        + ", attestationDocBytes="
+        + Arrays.toString(attestationDocBytes)
+        + "]";
   }
 }

@@ -17,13 +17,10 @@
 package com.google.mbs.domain;
 
 import java.time.Instant;
-import java.util.Objects;
 
 public record ValidityPeriod(Instant notBefore, Instant notAfter) {
 
   public ValidityPeriod {
-    Objects.requireNonNull(notBefore, "notBefore must not be null");
-    Objects.requireNonNull(notAfter, "notAfter must not be null");
     if (!notAfter.isAfter(notBefore)) {
       throw new IllegalArgumentException(
           String.format(
@@ -32,7 +29,6 @@ public record ValidityPeriod(Instant notBefore, Instant notAfter) {
   }
 
   public boolean isValidAt(Instant timestamp) {
-    Objects.requireNonNull(timestamp, "timestamp must not be null");
     return !timestamp.isBefore(notBefore) && !timestamp.isAfter(notAfter);
   }
 }

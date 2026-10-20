@@ -32,3 +32,4 @@ This repository follows the **Ports and Adapters (Hexagonal Architecture)** patt
 - **Port-First**: Define domain models and port interfaces in `domain/` before writing implementations.
 - **Isolate Infrastructure**: Keep all AWS SDK, crypto libraries (Tink, BouncyCastle), and hardware logic confined to `adapters/`.
 - **Hermetic Tests**: Test domain logic with mocks/fakes of ports without AWS or Docker dependencies. Test adapters with targeted SDK mocks.
+- **Nullability**: Follow JSpecify (`@NullMarked`) non-null-by-default semantics (no `@NonNull`; use `@Nullable` or `Optional<T>` explicitly) and _Effective Java_ Item 49 for runtime `Objects.requireNonNull` checks. Do not write unit tests solely asserting `NullPointerException` on non-null parameters.

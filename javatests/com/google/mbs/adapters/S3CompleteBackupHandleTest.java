@@ -21,7 +21,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.domain.ArtifactType;
 import com.google.mbs.domain.KeyBackup;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
@@ -52,7 +51,7 @@ public class S3CompleteBackupHandleTest {
             "attestation".getBytes(StandardCharsets.UTF_8));
     when(reader.read(0)).thenReturn(expected);
     S3CompleteBackupHandle handle =
-        new S3CompleteBackupHandle(0, reader, new EnumMap<>(ArtifactType.class));
+        new S3CompleteBackupHandle(0, reader, new EnumMap<>(KeyBackupElement.class));
 
     assertThat(handle.read()).isSameInstanceAs(expected);
     assertThat(handle.read()).isSameInstanceAs(expected);

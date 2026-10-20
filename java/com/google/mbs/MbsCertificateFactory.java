@@ -27,6 +27,7 @@ import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Date;
+import java.util.Objects;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
@@ -46,9 +47,19 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 @FunctionalInterface
 public interface MbsCertificateFactory {
 
-  record X509CertificateAndPrivateKey(X509Certificate certificate, PrivateKey privateKey) {}
+  record X509CertificateAndPrivateKey(X509Certificate certificate, PrivateKey privateKey) {
+    public X509CertificateAndPrivateKey {
+      Objects.requireNonNull(certificate);
+      Objects.requireNonNull(privateKey);
+    }
+  }
 
-  record CertSignatureSpec(String keyAlgorithm, int keySize, String signatureAlgorithm) {}
+  record CertSignatureSpec(String keyAlgorithm, int keySize, String signatureAlgorithm) {
+    public CertSignatureSpec {
+      Objects.requireNonNull(keyAlgorithm);
+      Objects.requireNonNull(signatureAlgorithm);
+    }
+  }
 
   class MbsCertificateFactoryException extends RuntimeException {
     public MbsCertificateFactoryException(String message, Throwable cause) {
@@ -71,6 +82,9 @@ public interface MbsCertificateFactory {
       X500Name subjectName,
       Optional<GeneralNames> subjectAlternativeNames,
       int keyUsageMask) {
+    Objects.requireNonNull(certSignatureSpec);
+    Objects.requireNonNull(subjectName);
+    Objects.requireNonNull(subjectAlternativeNames);
     return params -> {
       try {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(certSignatureSpec.keyAlgorithm());

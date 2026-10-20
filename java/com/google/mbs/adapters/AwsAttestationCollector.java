@@ -22,6 +22,7 @@ import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.AttestationToken;
 import jakarta.inject.Inject;
 import java.security.PublicKey;
+import java.util.Objects;
 import java.util.Optional;
 
 /** AWS Nitro Enclave implementation of {@link AttestationCollector}. */
@@ -31,7 +32,7 @@ public class AwsAttestationCollector implements AttestationCollector {
 
   @Inject
   public AwsAttestationCollector(NitroSecurityModuleFactory nsmFactory) {
-    this.nsmFactory = nsmFactory;
+    this.nsmFactory = Objects.requireNonNull(nsmFactory);
   }
 
   /**

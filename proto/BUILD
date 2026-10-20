@@ -13,19 +13,13 @@
 # limitations under the License.
 
 load("@com_google_protobuf//bazel:java_proto_library.bzl", "java_proto_library")
-load("@rules_proto//proto:defs.bzl", "proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
-proto_library(
-    name = "certificates_config_proto",
-    srcs = ["certificates_config.proto"],
-    deps = [
-        "@com_google_protobuf//:timestamp_proto",
-    ],
-)
-
+# google.mbs.v1.CertificatesConfig is owned by the PCIT API repository
+# (api/google/mbs/v1/certificates_config.proto), which only ships the
+# proto_library; the Java bindings are generated here.
 java_proto_library(
     name = "certificates_config_java_proto",
-    deps = [":certificates_config_proto"],
+    deps = ["@pcit_api//google/mbs/v1:certificates_config_proto"],
 )

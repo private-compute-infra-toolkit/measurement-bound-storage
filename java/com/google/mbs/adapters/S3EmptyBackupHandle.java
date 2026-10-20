@@ -19,24 +19,16 @@ package com.google.mbs.adapters;
 import com.google.mbs.domain.BackupHandle;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupStorageException;
+import java.util.Objects;
 
 /**
  * S3 implementation of {@link BackupHandle.Empty} that delegates writing a new backup to {@link
  * S3BackupWriter}.
  */
-final class S3EmptyBackupHandle implements BackupHandle.Empty {
+record S3EmptyBackupHandle(int epoch, S3BackupWriter writer) implements BackupHandle.Empty {
 
-  private final int epoch;
-  private final S3BackupWriter writer;
-
-  S3EmptyBackupHandle(int epoch, S3BackupWriter writer) {
-    this.epoch = epoch;
-    this.writer = writer;
-  }
-
-  @Override
-  public int epoch() {
-    return epoch;
+  S3EmptyBackupHandle {
+    Objects.requireNonNull(writer);
   }
 
   @Override

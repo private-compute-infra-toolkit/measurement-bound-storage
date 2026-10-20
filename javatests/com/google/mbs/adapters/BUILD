@@ -47,9 +47,34 @@ java_test(
 )
 
 java_test(
+    name = "S3CompleteCrossSignedCertHandleTest",
+    size = "small",
+    srcs = ["S3CompleteCrossSignedCertHandleTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_truth_truth",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
     name = "S3EmptyBackupHandleTest",
     size = "small",
     srcs = ["S3EmptyBackupHandleTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "S3EmptyCrossSignedCertHandleTest",
+    size = "small",
+    srcs = ["S3EmptyCrossSignedCertHandleTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",

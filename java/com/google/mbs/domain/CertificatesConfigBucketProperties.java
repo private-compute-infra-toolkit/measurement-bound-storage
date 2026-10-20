@@ -17,7 +17,6 @@
 package com.google.mbs.domain;
 
 import java.util.Objects;
-import org.jspecify.annotations.NonNull;
 
 /**
  * Configuration properties for the certificates configuration bucket.
@@ -25,11 +24,9 @@ import org.jspecify.annotations.NonNull;
  * @param bucketName Name of the bucket hosting the rotations configuration.
  * @param configFileName File key / name of the rotations textproto within the bucket.
  */
-public record CertificatesConfigBucketProperties(
-    @NonNull String bucketName, @NonNull String configFileName) {
-
+public record CertificatesConfigBucketProperties(String bucketName, String configFileName) {
   public CertificatesConfigBucketProperties {
-    Objects.requireNonNull(bucketName, "bucketName must not be null");
-    Objects.requireNonNull(configFileName, "configFileName must not be null");
+    Objects.requireNonNull(bucketName);
+    Objects.requireNonNull(configFileName);
   }
 }

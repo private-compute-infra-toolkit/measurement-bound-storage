@@ -16,6 +16,25 @@ bazel_dep(name = "grpc-java", version = "1.71.0", repo_name = "io_grpc_grpc_java
 bazel_dep(name = "protobuf", version = "31.1", repo_name = "com_google_protobuf")
 bazel_dep(name = "rules_proto", version = "7.1.0")
 
+# PCIT API protos (google/mbs/v1/certificates_config.proto). Consumers of MBS
+# (TCA, PES, TLedger) provide their own pcit_api override; this one only
+# applies when MBS is built standalone.
+bazel_dep(name = "pcit_api", version = "0.0.0")
+local_path_override(
+    module_name = "pcit_api",
+    path = "api",
+)
+
+# pcit_api depends on oak (for the TCA policy protos) and resolves it with an
+# archive_override, which Bazel ignores in non-root modules. MBS never builds an
+# oak target, so when MBS is the root module oak is satisfied by an empty stub
+# instead of pulling oak's toolchains, gRPC and Maven artifacts into the graph.
+# See bazel/oak_stub/MODULE.bazel.
+local_path_override(
+    module_name = "oak",
+    path = "bazel/oak_stub",
+)
+
 llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
 llvm.toolchain(
     name = "cpp_toolchain",
@@ -69,7 +88,6 @@ maven.install(
         "junit:junit:4.13.2",
         "com.google.truth:truth:1.4.4",
         "org.mockito:mockito-core:3.12.4",
-        "com.google.code.gson:gson:2.11.0",
         "org.bouncycastle:bcprov-jdk18on:" + BOUNCY_CASTLE_VERSION,
         "org.bouncycastle:bcpkix-jdk18on:" + BOUNCY_CASTLE_VERSION,
         "software.amazon.awssdk:s3:" + AWS_SDK_VERSION,
@@ -77,7 +95,6 @@ maven.install(
         "software.amazon.awssdk:kms:" + AWS_SDK_VERSION,
         "software.amazon.awssdk:regions:" + AWS_SDK_VERSION,
         "software.amazon.awssdk:sdk-core:" + AWS_SDK_VERSION,
-        "dev.sigstore:sigstore-java:2.0.0-rc1",
         "jakarta.inject:jakarta.inject-api:2.0.1",
         "commons-io:commons-io:2.18.0",
         "com.google.inject:guice:7.0.0",

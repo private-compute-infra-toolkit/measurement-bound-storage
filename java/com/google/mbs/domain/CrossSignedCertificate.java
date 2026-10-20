@@ -21,8 +21,8 @@ import java.util.Objects;
 public record CrossSignedCertificate(CrossSignedCertificateId id, ValidityPeriod validityPeriod) {
 
   public CrossSignedCertificate {
-    Objects.requireNonNull(id, "id must not be null");
-    Objects.requireNonNull(validityPeriod, "validityPeriod must not be null");
+    Objects.requireNonNull(id);
+    Objects.requireNonNull(validityPeriod);
   }
 
   public CrossSignedCertificate(

@@ -1,0 +1,9 @@
+{
+  "docker": {
+    "registry": {
+      "host": "us-docker.pkg.dev",
+      "project": "kiwi-air-force-remote-build",
+      "repository": "privacysandbox"
+    }
+  }
+}

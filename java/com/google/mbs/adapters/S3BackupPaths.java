@@ -16,23 +16,25 @@
 
 package com.google.mbs.adapters;
 
-import com.google.mbs.domain.ArtifactType;
+import com.google.mbs.domain.CrossSignedCertificateId;
 
 public final class S3BackupPaths {
 
   public static final String PRIVATE_PREFIX = "private/";
   public static final String PUBLIC_PREFIX = "public/";
+  public static final String CROSS_SIGNED_PREFIX = PUBLIC_PREFIX + "cross-signed/";
   public static final String KMS_ENCRYPTED_DATA_KEY_FILE = "root_data_key.kms";
   public static final String AES_ENCRYPTED_PRIVATE_KEY_FILE = "root_private_key.aes";
   public static final String ROOT_CERT_FILE = "root_certificate.pem";
+  public static final String CROSS_SIGNED_CERT_FILE = "cross_signed_certificate.pem";
   public static final String ATTESTATION_DOC_FILE = "attestation_doc.base64";
   public static final String LOCK_PATH = PRIVATE_PREFIX + "root_generation.lock";
   public static final String CERTIFICATES_CONFIG_FILE_PATH = "certificates_config.textproto";
 
   private S3BackupPaths() {}
 
-  public static String getFileName(ArtifactType artifactType) {
-    return switch (artifactType) {
+  public static String getFileName(KeyBackupElement element) {
+    return switch (element) {
       case CERT -> ROOT_CERT_FILE;
       case ATTESTATION_DOC -> ATTESTATION_DOC_FILE;
       case KMS_DATA_KEY -> KMS_ENCRYPTED_DATA_KEY_FILE;
@@ -54,6 +56,10 @@ public final class S3BackupPaths {
 
   public static String getAttestationDocPath(int epoch) {
     return PUBLIC_PREFIX + epoch + "/" + ATTESTATION_DOC_FILE;
+  }
+
+  public static String getCrossSignedCertPath(CrossSignedCertificateId id) {
+    return CROSS_SIGNED_PREFIX + id.toKeyString() + "/" + CROSS_SIGNED_CERT_FILE;
   }
 
   public static String getLockPath() {

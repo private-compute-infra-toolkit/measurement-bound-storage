@@ -16,8 +16,6 @@
 
 package com.google.mbs.domain;
 
-import org.jspecify.annotations.NonNull;
-
 /** Outbound port interface for retrieving {@link CertificatesConfig}. */
 public interface CertificatesConfigProvider {
 
@@ -26,5 +24,5 @@ public interface CertificatesConfigProvider {
    *
    * @throws InvalidCertificatesConfigException if the configuration cannot be loaded or is invalid.
    */
-  @NonNull CertificatesConfig getCertificatesConfig() throws InvalidCertificatesConfigException;
+  CertificatesConfig getCertificatesConfig() throws InvalidCertificatesConfigException;
 }

@@ -20,7 +20,7 @@ import "google/protobuf/timestamp.proto";
 
 option java_multiple_files = true;
 option java_outer_classname = "CertificatesConfigProto";
-option java_package = "com.google.mbs.proto";
+option java_package = "com.google.mbs.v1";
 
 message ValidityPeriod {
   google.protobuf.Timestamp not_before = 1;

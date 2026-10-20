@@ -30,6 +30,10 @@ import com.google.crypto.tink.util.SecretBytes;
 import com.google.mbs.domain.AttestationToken;
 import com.google.mbs.domain.BackupHandle;
 import com.google.mbs.domain.BundleCorruptedException;
+import com.google.mbs.domain.CertificatesConfig;
+import com.google.mbs.domain.CrossSignedCertHandle;
+import com.google.mbs.domain.CrossSignedCertificate;
+import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupIncompleteException;
@@ -41,6 +45,7 @@ import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.KmsException;
 import com.google.mbs.domain.MeasurementBoundBundle;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.StorageSnapshot;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
@@ -58,7 +63,11 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
@@ -87,9 +96,22 @@ public class KmsMeasurementBoundCertificateProvider
   private final String kmsKeyArn;
   private final Metrics metrics;
 
-  private record LoadedBundle(KeyBackup backup, MeasurementBoundBundle certificate) {}
+  private record LoadedBundle(KeyBackup backup, MeasurementBoundBundle bundle) {
+    private LoadedBundle {
+      Objects.requireNonNull(backup);
+      Objects.requireNonNull(bundle);
+    }
+  }
 
-  private final AtomicReference<LoadedBundle> loadedBundle = new AtomicReference<>();
+  private record ActiveTrustState(
+      Map<Integer, LoadedBundle> bundlesByEpoch, List<X509Certificate> crossSignedCertificates) {
+    private ActiveTrustState {
+      bundlesByEpoch = Map.copyOf(bundlesByEpoch);
+      crossSignedCertificates = List.copyOf(crossSignedCertificates);
+    }
+  }
+
+  private final AtomicReference<ActiveTrustState> activeTrustState = new AtomicReference<>();
 
   @Inject
   KmsMeasurementBoundCertificateProvider(
@@ -97,25 +119,27 @@ public class KmsMeasurementBoundCertificateProvider
       KeyBackupStorage storage,
       @KmsKeyArn String kmsKeyArn,
       Metrics metrics) {
-    this.kmsClient = kmsClient;
-    this.storage = storage;
-    this.kmsKeyArn = kmsKeyArn;
-    this.metrics = metrics;
+    this.kmsClient = Objects.requireNonNull(kmsClient);
+    this.storage = Objects.requireNonNull(storage);
+    this.kmsKeyArn = Objects.requireNonNull(kmsKeyArn);
+    this.metrics = Objects.requireNonNull(metrics);
   }
 
   @Override
   public TrustPackage getActiveTrustPackage() {
-    LoadedBundle loaded = loadedBundle.get();
-    if (loaded == null) {
-      throw new IllegalStateException("Measurement-bound certificate has not been initialized yet");
+    ActiveTrustState state = activeTrustState.get();
+    if (state == null) {
+      throw new IllegalStateException("Trust package has not been initialized yet");
     }
-    return new TrustPackage(List.of(loaded.certificate()), List.of());
+    List<MeasurementBoundBundle> bundles =
+        state.bundlesByEpoch().values().stream().map(LoadedBundle::bundle).toList();
+    return new TrustPackage(bundles, state.crossSignedCertificates());
   }
 
   @Override
-  public synchronized void reload() {
+  public synchronized void reload(CertificatesConfig config) {
     try {
-      reloadCertificateWithRetryOnTransientError();
+      reloadTrustPackageWithRetryOnTransientError(config);
       metrics.recordLoadEvent(Metrics.LoadEvent.SUCCESS);
     } catch (Exception failure) {
       metrics.recordLoadEvent(mapFailureToEvent(failure));
@@ -128,30 +152,68 @@ public class KmsMeasurementBoundCertificateProvider
     }
   }
 
-  private void reloadCertificateWithRetryOnTransientError()
+  private void reloadTrustPackageWithRetryOnTransientError(CertificatesConfig config)
       throws BundleCorruptedException,
           InterruptedException,
           KmsException,
           KeyBackupStorageException {
     try {
-      loadExistingKeyBackup();
+      loadActiveTrustState(config);
     } catch (KeyBackupPartiallyWrittenException transientState) {
       logger.atWarning().withCause(transientState).log(
           "Transient backup state, retrying in %d ms", retryBackoff.toMillis());
       Thread.sleep(retryBackoff.toMillis());
-      loadExistingKeyBackup();
+      loadActiveTrustState(config);
     }
   }
 
-  private void loadExistingKeyBackup()
+  private void loadActiveTrustState(CertificatesConfig config)
       throws BundleCorruptedException, KmsException, KeyBackupStorageException {
     StorageSnapshot snapshot = storage.getSnapshot();
-    KeyBackup backup = snapshot.getBundleHandle(0).expect(BackupHandle.Complete.class).read();
-    LoadedBundle loaded = loadedBundle.get();
-    if (loaded != null && backup.equals(loaded.backup())) {
-      return;
+    Map<Integer, LoadedBundle> nextBundles = loadActiveBundles(snapshot, config);
+    List<X509Certificate> nextCrossSigned = loadActiveCrossSignedCertificates(snapshot, config);
+    activeTrustState.set(new ActiveTrustState(nextBundles, nextCrossSigned));
+  }
+
+  private Map<Integer, LoadedBundle> loadActiveBundles(
+      StorageSnapshot snapshot, CertificatesConfig config)
+      throws BundleCorruptedException, KmsException, KeyBackupStorageException {
+    ActiveTrustState previousState = activeTrustState.get();
+    Map<Integer, LoadedBundle> previouslyLoaded =
+        previousState != null ? previousState.bundlesByEpoch() : Map.of();
+    Map<Integer, LoadedBundle> nextLoaded = new HashMap<>();
+
+    for (SelfSignedCertificate certConfig : config.activeSelfSignedCertificates()) {
+      int epochId = certConfig.epochId();
+      KeyBackup backup =
+          snapshot.getBundleHandle(epochId).expect(BackupHandle.Complete.class).read();
+      nextLoaded.put(epochId, useLoadedOrLoadFromBackup(previouslyLoaded.get(epochId), backup));
     }
-    loadedBundle.set(new LoadedBundle(backup, toMeasurementBoundCertificate(backup)));
+    return nextLoaded;
+  }
+
+  private List<X509Certificate> loadActiveCrossSignedCertificates(
+      StorageSnapshot snapshot, CertificatesConfig config)
+      throws BundleCorruptedException, KeyBackupStorageException {
+    List<X509Certificate> crossSignedCertificates = new ArrayList<>();
+    for (CrossSignedCertificate crossCertConfig : config.activeCrossSignedCertificates()) {
+      CrossSignedCertificateBackup backup =
+          snapshot
+              .getCrossSignedCertHandle(crossCertConfig.id())
+              .expect(CrossSignedCertHandle.Complete.class)
+              .read();
+      // Parsing X.509 is local (no KMS call), so no need to cache decoded certs across reloads.
+      crossSignedCertificates.add(parseCertificate(backup.certBytes()));
+    }
+    return crossSignedCertificates;
+  }
+
+  private LoadedBundle useLoadedOrLoadFromBackup(LoadedBundle previous, KeyBackup backup)
+      throws KmsException, BundleCorruptedException {
+    if (previous != null && previous.backup().equals(backup)) {
+      return previous;
+    }
+    return new LoadedBundle(backup, toMeasurementBoundBundle(backup));
   }
 
   private static Metrics.LoadEvent mapFailureToEvent(Exception failure) {
@@ -170,18 +232,14 @@ public class KmsMeasurementBoundCertificateProvider
     }
   }
 
-  private MeasurementBoundBundle toMeasurementBoundCertificate(KeyBackup keyBackup)
+  private MeasurementBoundBundle toMeasurementBoundBundle(KeyBackup keyBackup)
       throws KmsException, BundleCorruptedException {
     byte[] dataKey = kmsClient.decrypt(keyBackup.kmsEncryptedDataKey(), kmsKeyArn);
 
-    X509Certificate certificate;
+    X509Certificate certificate = parseCertificate(keyBackup.certBytes());
     PrivateKey privateKey;
     AttestationToken token;
     try {
-      CertificateFactory x509CertFactory = CertificateFactory.getInstance(CERTIFICATE_TYPE);
-      certificate =
-          (X509Certificate)
-              x509CertFactory.generateCertificate(new ByteArrayInputStream(keyBackup.certBytes()));
       token = AttestationToken.fromBytes(keyBackup.attestationDocBytes());
       byte[] decryptedPrivateKeyBytes = decrypt(keyBackup.aeadEncryptedPrivateKey(), dataKey);
       privateKey =
@@ -194,6 +252,16 @@ public class KmsMeasurementBoundCertificateProvider
       throw new BundleCorruptedException("Private key does not match certificate");
     }
     return new MeasurementBoundBundle(certificate, privateKey, token);
+  }
+
+  private X509Certificate parseCertificate(byte[] certBytes) throws BundleCorruptedException {
+    try {
+      CertificateFactory x509CertFactory = CertificateFactory.getInstance(CERTIFICATE_TYPE);
+      return (X509Certificate)
+          x509CertFactory.generateCertificate(new ByteArrayInputStream(certBytes));
+    } catch (GeneralSecurityException e) {
+      throw new BundleCorruptedException("Certificate could not be decoded", e);
+    }
   }
 
   private boolean isKeyMatchingCertificate(X509Certificate certificate, PrivateKey privateKey) {

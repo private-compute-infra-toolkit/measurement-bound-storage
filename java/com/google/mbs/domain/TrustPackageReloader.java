@@ -25,10 +25,11 @@ package com.google.mbs.domain;
 public interface TrustPackageReloader {
 
   /**
-   * Synchronously reloads or generates the trust package from backing storage, updating the active
-   * trust package in place.
+   * Synchronously reloads the trust package from backing storage according to {@code config},
+   * updating the active trust package in place.
    *
-   * @throws RuntimeException if loading or generating the trust package fails
+   * @param config certificates configuration specifying active certificates to load
+   * @throws RuntimeException if loading the trust package fails
    */
-  void reload();
+  void reload(CertificatesConfig config);
 }

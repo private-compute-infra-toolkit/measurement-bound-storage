@@ -100,13 +100,12 @@ public class MeasurementBoundCertificateMonitorTest {
     InOrder inOrder = inOrder(mockConfigProvider, mockGenerator, mockReloader, mockMetrics);
     inOrder.verify(mockConfigProvider).getCertificatesConfig();
     inOrder.verify(mockGenerator).generateCertificates(same(CONFIG));
-    inOrder.verify(mockReloader).reload();
+    inOrder.verify(mockReloader).reload(same(CONFIG));
     inOrder.verify(mockMetrics).recordEvent(Metrics.MbsEvent.SUCCESS);
   }
 
-  // TODO: rework this test when reload would also rely on config
   @Test
-  public void runOneIteration_whenConfigFetchFails_skipsGenerationReloadsAndRecordsFailure()
+  public void runOneIteration_whenConfigFetchFails_skipsGenerationAndReloadAndRecordsFailure()
       throws Exception {
     when(mockConfigProvider.getCertificatesConfig())
         .thenThrow(new InvalidCertificatesConfigException("Simulated config fetch failure"));
@@ -114,7 +113,7 @@ public class MeasurementBoundCertificateMonitorTest {
     service.runOneIteration();
 
     verify(mockGenerator, never()).generateCertificates(any());
-    verify(mockReloader).reload();
+    verify(mockReloader, never()).reload(any());
     verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
   }
 
@@ -128,19 +127,19 @@ public class MeasurementBoundCertificateMonitorTest {
     service.runOneIteration();
 
     InOrder inOrder = inOrder(mockGenerator, mockReloader, mockMetrics);
-    inOrder.verify(mockGenerator).generateCertificates(any());
-    inOrder.verify(mockReloader).reload();
+    inOrder.verify(mockGenerator).generateCertificates(same(CONFIG));
+    inOrder.verify(mockReloader).reload(same(CONFIG));
     inOrder.verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
   }
 
   @Test
   public void runOneIteration_whenReloaderThrowsException_swallowsExceptionAndRecordsFailure() {
-    doThrow(new RuntimeException("Simulated KMS failure")).when(mockReloader).reload();
+    doThrow(new RuntimeException("Simulated KMS failure")).when(mockReloader).reload(any());
 
     service.runOneIteration();
 
-    verify(mockGenerator).generateCertificates(any());
-    verify(mockReloader).reload();
+    verify(mockGenerator).generateCertificates(same(CONFIG));
+    verify(mockReloader).reload(same(CONFIG));
     verify(mockMetrics).recordEvent(Metrics.MbsEvent.FAILURE);
   }
 
@@ -162,7 +161,7 @@ public class MeasurementBoundCertificateMonitorTest {
     service.awaitRunning();
     assertTrue(service.isRunning());
     verify(mockGenerator, timeout(5000)).generateCertificates(any());
-    verify(mockReloader, timeout(5000)).reload();
+    verify(mockReloader, timeout(5000)).reload(any());
 
     service.stop();
     service.awaitTerminated();

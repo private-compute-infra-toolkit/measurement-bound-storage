@@ -145,50 +145,55 @@ public class BackupHandleTest {
   }
 
   @Test
-  public void keyBackup_equalsAndHashCode_comparesByReferenceAndContent() {
+  public void keyBackup_equalsHashCodeAndToString_comparesByReferenceAndContent() {
     KeyBackup sameReference = SAMPLE_BACKUP;
     KeyBackup clonedContent = clone(SAMPLE_BACKUP);
 
     assertThat(SAMPLE_BACKUP.equals(sameReference)).isTrue();
     assertThat(SAMPLE_BACKUP).isEqualTo(clonedContent);
     assertThat(SAMPLE_BACKUP.hashCode()).isEqualTo(clonedContent.hashCode());
+    assertThat(SAMPLE_BACKUP.toString()).isEqualTo(clonedContent.toString());
     assertThat(SAMPLE_BACKUP.equals(null)).isFalse();
     assertThat(SAMPLE_BACKUP.equals("not-a-backup")).isFalse();
   }
 
   @Test
-  public void keyBackup_equalsAndHashCode_mutatedCertBytes_notEqual() {
+  public void keyBackup_equalsHashCodeAndToString_mutatedCertBytes_notEqual() {
     KeyBackup mutated = clone(SAMPLE_BACKUP);
     mutated.certBytes()[0]++;
 
     assertThat(SAMPLE_BACKUP).isNotEqualTo(mutated);
     assertThat(SAMPLE_BACKUP.hashCode()).isNotEqualTo(mutated.hashCode());
+    assertThat(SAMPLE_BACKUP.toString()).isNotEqualTo(mutated.toString());
   }
 
   @Test
-  public void keyBackup_equalsAndHashCode_mutatedKmsEncryptedDataKey_notEqual() {
+  public void keyBackup_equalsHashCodeAndToString_mutatedKmsEncryptedDataKey_notEqual() {
     KeyBackup mutated = clone(SAMPLE_BACKUP);
     mutated.kmsEncryptedDataKey()[0]++;
 
     assertThat(SAMPLE_BACKUP).isNotEqualTo(mutated);
     assertThat(SAMPLE_BACKUP.hashCode()).isNotEqualTo(mutated.hashCode());
+    assertThat(SAMPLE_BACKUP.toString()).isNotEqualTo(mutated.toString());
   }
 
   @Test
-  public void keyBackup_equalsAndHashCode_mutatedAeadEncryptedPrivateKey_notEqual() {
+  public void keyBackup_equalsHashCodeAndToString_mutatedAeadEncryptedPrivateKey_notEqual() {
     KeyBackup mutated = clone(SAMPLE_BACKUP);
     mutated.aeadEncryptedPrivateKey()[0]++;
 
     assertThat(SAMPLE_BACKUP).isNotEqualTo(mutated);
     assertThat(SAMPLE_BACKUP.hashCode()).isNotEqualTo(mutated.hashCode());
+    assertThat(SAMPLE_BACKUP.toString()).isNotEqualTo(mutated.toString());
   }
 
   @Test
-  public void keyBackup_equalsAndHashCode_mutatedAttestationDocBytes_notEqual() {
+  public void keyBackup_equalsHashCodeAndToString_mutatedAttestationDocBytes_notEqual() {
     KeyBackup mutated = clone(SAMPLE_BACKUP);
     mutated.attestationDocBytes()[0]++;
 
     assertThat(SAMPLE_BACKUP).isNotEqualTo(mutated);
     assertThat(SAMPLE_BACKUP.hashCode()).isNotEqualTo(mutated.hashCode());
+    assertThat(SAMPLE_BACKUP.toString()).isNotEqualTo(mutated.toString());
   }
 }

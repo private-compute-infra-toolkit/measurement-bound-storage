@@ -53,6 +53,8 @@ import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemWriter;
 
@@ -88,13 +90,13 @@ public class KmsMeasurementBoundCertificateGenerator
       AttestationCollector attestationCollector,
       MbsCertificateFactory certificateFactory,
       Metrics metrics) {
-    this.kmsClient = kmsClient;
-    this.storage = storage;
-    this.kmsKeyArn = kmsKeyArn;
-    this.userDataBoundToAttestation = userDataBoundToAttestation;
-    this.attestationCollector = attestationCollector;
-    this.certificateFactory = certificateFactory;
-    this.metrics = metrics;
+    this.kmsClient = Objects.requireNonNull(kmsClient);
+    this.storage = Objects.requireNonNull(storage);
+    this.kmsKeyArn = Objects.requireNonNull(kmsKeyArn);
+    this.userDataBoundToAttestation = Objects.requireNonNull(userDataBoundToAttestation);
+    this.attestationCollector = Objects.requireNonNull(attestationCollector);
+    this.certificateFactory = Objects.requireNonNull(certificateFactory);
+    this.metrics = Objects.requireNonNull(metrics);
   }
 
   @Override
@@ -120,36 +122,51 @@ public class KmsMeasurementBoundCertificateGenerator
           StorageAlreadyLockedException,
           KeyBackupStorageException {
     try {
-      generateMissingKeyBackup(config);
+      generateMissingKeyBackups(config);
     } catch (StorageAlreadyLockedException transientState) {
       logger.atWarning().withCause(transientState).log(
           "Transient backup state, retrying in %d ms", retryBackoff.toMillis());
       Thread.sleep(retryBackoff.toMillis());
-      generateMissingKeyBackup(config);
+      generateMissingKeyBackups(config);
     }
   }
 
-  private void generateMissingKeyBackup(CertificatesConfig config)
+  private void generateMissingKeyBackups(CertificatesConfig config)
       throws IOException,
           GeneralSecurityException,
           KmsException,
           StorageAlreadyLockedException,
           KeyBackupStorageException {
-    StorageSnapshot snapshot = storage.getSnapshot();
-    // TODO: iterate over certs present in the config
-    if (!(snapshot.getBundleHandle(0) instanceof BackupHandle.Empty)) {
+    if (findMissingCertificates(config, storage.getSnapshot()).isEmpty()) {
       return;
     }
-    SelfSignedCertificate certConfig = config.selfSignedCertificates().get(0);
     storage.acquireLock();
-    snapshot = storage.getSnapshot();
+    List<BackupHandle.Empty> missingCerts = findMissingCertificates(config, storage.getSnapshot());
 
     // Intentionally no try/finally: a failure under the lock leaves the backup in an unknown state,
     // so the lock stays behind until an operator has investigated and removed it by hand.
-    if (snapshot.getBundleHandle(0) instanceof BackupHandle.Empty emptyBackup) {
-      emptyBackup.write(generateKeyBackup(certConfig));
+    for (BackupHandle.Empty empty : missingCerts) {
+      SelfSignedCertificate certConfig = config.selfSignedCertificates().get(empty.epoch());
+      empty.write(generateKeyBackup(certConfig));
     }
     storage.releaseLock();
+  }
+
+  private static List<BackupHandle.Empty> findMissingCertificates(
+      CertificatesConfig config, StorageSnapshot snapshot) {
+    return config.getSelfSignedCertificates().stream()
+        .<BackupHandle.Empty>mapMulti(
+            (certConfig, consumer) -> {
+              BackupHandle handle = snapshot.getBundleHandle(certConfig.epochId());
+              if (handle instanceof BackupHandle.Empty empty) {
+                consumer.accept(empty);
+              } else if (!(handle instanceof BackupHandle.Complete)) {
+                logger.atWarning().log(
+                    "Skipping certificate generation for epoch %d in state %s",
+                    certConfig.epochId(), handle.getClass().getSimpleName());
+              }
+            })
+        .toList();
   }
 
   private static Metrics.GenerationEvent mapFailureToEvent(Exception failure) {

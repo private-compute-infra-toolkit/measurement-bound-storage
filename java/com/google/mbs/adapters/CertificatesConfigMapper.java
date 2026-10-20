@@ -29,13 +29,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import org.jspecify.annotations.NonNull;
 
 /**
- * Maps {@link com.google.mbs.proto.CertificatesConfig} protobuf messages to domain entities,
- * enforcing validation invariants.
+ * Maps {@link com.google.mbs.v1.CertificatesConfig} protobuf messages to domain entities, enforcing
+ * validation invariants.
  */
 public final class CertificatesConfigMapper {
 
@@ -48,23 +46,21 @@ public final class CertificatesConfigMapper {
   private CertificatesConfigMapper() {}
 
   /**
-   * Converts a {@link com.google.mbs.proto.CertificatesConfig} protobuf message to a domain {@link
+   * Converts a {@link com.google.mbs.v1.CertificatesConfig} protobuf message to a domain {@link
    * CertificatesConfig} entity.
    *
    * @throws InvalidCertificatesConfigException if any field is missing, inconsistent, or invalid.
    */
-  public static @NonNull CertificatesConfig toDomain(com.google.mbs.proto.CertificatesConfig proto)
+  public static CertificatesConfig toDomain(com.google.mbs.v1.CertificatesConfig proto)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(proto, "CertificatesConfig proto must not be null");
-
     Map<Integer, SelfSignedCertificate> selfSignedMap = new HashMap<>();
-    for (Map.Entry<Integer, com.google.mbs.proto.SelfSignedCertificate> entry :
+    for (Map.Entry<Integer, com.google.mbs.v1.SelfSignedCertificate> entry :
         proto.getSelfSignedCertificatesMap().entrySet()) {
       selfSignedMap.put(entry.getKey(), toDomain(entry.getValue()));
     }
 
     Map<CrossSignedCertificateId, CrossSignedCertificate> crossSignedMap = new HashMap<>();
-    for (Map.Entry<String, com.google.mbs.proto.CrossSignedCertificate> entry :
+    for (Map.Entry<String, com.google.mbs.v1.CrossSignedCertificate> entry :
         proto.getCrossSignedCertificatesMap().entrySet()) {
       CrossSignedCertificateId id = parseCrossSignedKey(entry.getKey());
       crossSignedMap.put(id, toDomain(entry.getValue()));
@@ -101,12 +97,11 @@ public final class CertificatesConfigMapper {
   }
 
   /**
-   * Converts a {@link com.google.mbs.proto.SelfSignedCertificate} protobuf message to a domain
-   * {@link SelfSignedCertificate}.
+   * Converts a {@link com.google.mbs.v1.SelfSignedCertificate} protobuf message to a domain {@link
+   * SelfSignedCertificate}.
    */
-  static SelfSignedCertificate toDomain(com.google.mbs.proto.SelfSignedCertificate proto)
+  static SelfSignedCertificate toDomain(com.google.mbs.v1.SelfSignedCertificate proto)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(proto, "SelfSignedCertificate proto must not be null");
     if (!proto.hasEpochId()) {
       throw new InvalidCertificatesConfigException("SelfSignedCertificate is missing epoch_id");
     }
@@ -123,12 +118,11 @@ public final class CertificatesConfigMapper {
   }
 
   /**
-   * Converts a {@link com.google.mbs.proto.CrossSignedCertificate} protobuf message to a domain
-   * {@link CrossSignedCertificate}.
+   * Converts a {@link com.google.mbs.v1.CrossSignedCertificate} protobuf message to a domain {@link
+   * CrossSignedCertificate}.
    */
-  static CrossSignedCertificate toDomain(com.google.mbs.proto.CrossSignedCertificate proto)
+  static CrossSignedCertificate toDomain(com.google.mbs.v1.CrossSignedCertificate proto)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(proto, "CrossSignedCertificate proto must not be null");
     if (!proto.hasPrivateKeyEpochId()) {
       throw new InvalidCertificatesConfigException(
           "CrossSignedCertificate is missing private_key_epoch_id");
@@ -154,12 +148,11 @@ public final class CertificatesConfigMapper {
   }
 
   /**
-   * Converts a {@link com.google.mbs.proto.ValidityPeriod} protobuf message to a domain {@link
+   * Converts a {@link com.google.mbs.v1.ValidityPeriod} protobuf message to a domain {@link
    * ValidityPeriod}.
    */
-  static ValidityPeriod toDomain(com.google.mbs.proto.ValidityPeriod proto)
+  static ValidityPeriod toDomain(com.google.mbs.v1.ValidityPeriod proto)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(proto, "ValidityPeriod proto must not be null");
     if (!proto.hasNotBefore() || !proto.hasNotAfter()) {
       throw new InvalidCertificatesConfigException(
           "ValidityPeriod must have both not_before and not_after specified");
@@ -174,14 +167,13 @@ public final class CertificatesConfigMapper {
   }
 
   /**
-   * Parses a textproto representation of {@link com.google.mbs.proto.CertificatesConfig} and maps
-   * it to the domain object.
+   * Parses a textproto representation of {@link com.google.mbs.v1.CertificatesConfig} and maps it
+   * to the domain object.
    */
-  public static @NonNull CertificatesConfig fromTextProto(String textProto)
+  public static CertificatesConfig fromTextProto(String textProto)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(textProto, "textProto string must not be null");
-    com.google.mbs.proto.CertificatesConfig.Builder builder =
-        com.google.mbs.proto.CertificatesConfig.newBuilder();
+    com.google.mbs.v1.CertificatesConfig.Builder builder =
+        com.google.mbs.v1.CertificatesConfig.newBuilder();
     try {
       TextFormat.getParser().merge(textProto, builder);
     } catch (TextFormat.ParseException e) {
@@ -211,22 +203,8 @@ public final class CertificatesConfigMapper {
 
   private static CrossSignedCertificateId parseCrossSignedKey(String keyStr)
       throws InvalidCertificatesConfigException {
-    Objects.requireNonNull(keyStr, "cross-signed certificate key must not be null");
-    String[] parts = keyStr.split("_", -1);
-    if (parts.length != 2) {
-      throw new InvalidCertificatesConfigException(
-          String.format(
-              "Invalid cross-signed key format '%s': expected"
-                  + " '<private_key_epoch_id>_<public_key_epoch_id>'",
-              keyStr));
-    }
     try {
-      int privateKeyEpochId = Integer.parseInt(parts[0]);
-      int publicKeyEpochId = Integer.parseInt(parts[1]);
-      return new CrossSignedCertificateId(privateKeyEpochId, publicKeyEpochId);
-    } catch (NumberFormatException e) {
-      throw new InvalidCertificatesConfigException(
-          String.format("Non-integer epoch in cross-signed key '%s'", keyStr), e);
+      return CrossSignedCertificateId.fromKeyString(keyStr);
     } catch (IllegalArgumentException e) {
       throw new InvalidCertificatesConfigException(e.getMessage(), e);
     }

@@ -17,6 +17,8 @@
 package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
+import com.google.mbs.domain.CrossSignedCertificateBackup;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupBucketProperties;
@@ -28,8 +30,8 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import org.jspecify.annotations.NonNull;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -47,8 +49,8 @@ public class S3BackupReader {
 
   @Inject
   public S3BackupReader(S3Client s3Client, KeyBackupBucketProperties bucketProperties) {
-    this.s3Client = s3Client;
-    this.bucketProperties = bucketProperties;
+    this.s3Client = Objects.requireNonNull(s3Client);
+    this.bucketProperties = Objects.requireNonNull(bucketProperties);
   }
 
   /**
@@ -65,7 +67,7 @@ public class S3BackupReader {
    *     missing
    * @throws KeyBackupAccessFailedException if the artifacts could not be read
    */
-  public @NonNull KeyBackup read(int epoch) throws KeyBackupStorageException {
+  public KeyBackup read(int epoch) throws KeyBackupStorageException {
     logger.atInfo().log("Reading backup artifacts from S3 for epoch %d", epoch);
     Optional<byte[]> certBytes =
         tryGetS3Object(
@@ -113,6 +115,27 @@ public class S3BackupReader {
         kmsEncryptedDataKey.get(),
         aeadEncryptedPrivateKey.get(),
         attestationDocBytes.get());
+  }
+
+  /**
+   * Reads the cross-signed certificate for {@code id}.
+   *
+   * @throws KeyBackupNotFoundException if the certificate is absent
+   * @throws KeyBackupAccessFailedException if the certificate could not be read
+   */
+  public CrossSignedCertificateBackup readCrossSignedCert(CrossSignedCertificateId id)
+      throws KeyBackupStorageException {
+    logger.atInfo().log("Reading cross-signed certificate from S3 for %s", id.toKeyString());
+    Optional<byte[]> certBytes =
+        tryGetS3Object(
+            bucketProperties.getPublicBucketName(), S3BackupPaths.getCrossSignedCertPath(id));
+    if (certBytes.isEmpty()) {
+      throw new KeyBackupNotFoundException(
+          "Cross-signed certificate absent for " + id.toKeyString());
+    }
+    logger.atInfo().log(
+        "Successfully read cross-signed certificate from S3 for %s", id.toKeyString());
+    return new CrossSignedCertificateBackup(certBytes.get());
   }
 
   private Optional<byte[]> tryGetS3Object(String bucket, String key)

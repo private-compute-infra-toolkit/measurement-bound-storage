@@ -20,9 +20,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
+import com.google.mbs.domain.AttestationToken;
 import com.google.mbs.domain.MeasurementBoundBundle;
 import com.google.mbs.domain.TrustPackage;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,9 +34,16 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TrustPackageTest {
 
+  private static MeasurementBoundBundle createBundle() {
+    return new MeasurementBoundBundle(
+        mock(X509Certificate.class),
+        mock(PrivateKey.class),
+        AttestationToken.fromBytes(new byte[0]));
+  }
+
   @Test
   public void constructor_storesBundlesAndCrossCertificates() {
-    MeasurementBoundBundle mbc = mock(MeasurementBoundBundle.class);
+    MeasurementBoundBundle mbc = createBundle();
     X509Certificate x509 = mock(X509Certificate.class);
 
     TrustPackage result = new TrustPackage(List.of(mbc), List.of(x509));
@@ -45,16 +55,20 @@ public class TrustPackageTest {
   }
 
   @Test
-  public void constructor_nullBundles_throwsNullPointerException() {
-    assertThrows(
-        NullPointerException.class,
-        () -> new TrustPackage(null, List.of(mock(X509Certificate.class))));
-  }
+  public void constructor_makesDefensiveUnmodifiableCopies() {
+    MeasurementBoundBundle mbc = createBundle();
+    X509Certificate x509 = mock(X509Certificate.class);
+    List<MeasurementBoundBundle> mutableBundles = new ArrayList<>(List.of(mbc));
+    List<X509Certificate> mutableCerts = new ArrayList<>(List.of(x509));
 
-  @Test
-  public void constructor_nullCrossSignedCertificates_throwsNullPointerException() {
+    TrustPackage result = new TrustPackage(mutableBundles, mutableCerts);
+    mutableBundles.clear();
+    mutableCerts.clear();
+
+    assertEquals(1, result.bundles().size());
+    assertEquals(1, result.crossSignedCertificates().size());
+    assertThrows(UnsupportedOperationException.class, () -> result.bundles().add(mbc));
     assertThrows(
-        NullPointerException.class,
-        () -> new TrustPackage(List.of(mock(MeasurementBoundBundle.class)), null));
+        UnsupportedOperationException.class, () -> result.crossSignedCertificates().add(x509));
   }
 }

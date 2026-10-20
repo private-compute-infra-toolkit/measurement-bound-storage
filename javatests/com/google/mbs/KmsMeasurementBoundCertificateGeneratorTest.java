@@ -16,6 +16,7 @@
 
 package com.google.mbs;
 
+import static com.google.mbs.testing.CertificateTestHelper.parseCertificate;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -43,6 +44,8 @@ import com.google.mbs.domain.AttestationCollector;
 import com.google.mbs.domain.AttestationToken;
 import com.google.mbs.domain.BackupHandle;
 import com.google.mbs.domain.CertificatesConfig;
+import com.google.mbs.domain.CrossSignedCertHandle;
+import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.KeyBackup;
 import com.google.mbs.domain.KeyBackupAccessFailedException;
 import com.google.mbs.domain.KeyBackupStorage;
@@ -54,14 +57,12 @@ import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.StorageAlreadyLockedException;
 import com.google.mbs.domain.StorageSnapshot;
 import com.google.mbs.domain.ValidityPeriod;
-import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
-import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
@@ -94,16 +95,30 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
   private KmsMeasurementBoundCertificateGenerator generator;
   private static final String KMS_KEY_ARN = "test-kms-key-arn";
   private static final byte[] TEST_USER_DATA = "test_userdata".getBytes(StandardCharsets.UTF_8);
-  private static final ValidityPeriod TEST_VALIDITY_PERIOD =
+  private static final ValidityPeriod VALIDITY_PERIOD_0 =
       new ValidityPeriod(
           Instant.parse("1930-01-01T00:00:00Z"), Instant.parse("1930-02-01T00:00:00Z"));
+  private static final ValidityPeriod VALIDITY_PERIOD_1 =
+      new ValidityPeriod(
+          Instant.parse("1931-01-01T00:00:00Z"), Instant.parse("1931-02-01T00:00:00Z"));
+  private static final ValidityPeriod VALIDITY_PERIOD_2 =
+      new ValidityPeriod(
+          Instant.parse("1932-01-01T00:00:00Z"), Instant.parse("1932-02-01T00:00:00Z"));
   private static final CertificatesConfig CONFIG =
-      new CertificatesConfig(
-          Map.of(0, new SelfSignedCertificate(0, TEST_VALIDITY_PERIOD)),
-          Map.of(),
-          Set.of(0),
-          Set.of(),
-          Set.of(0));
+      CertificatesConfig.builder()
+          .setSelfSignedCertificates(Map.of(0, new SelfSignedCertificate(0, VALIDITY_PERIOD_0)))
+          .setActiveSelfSignedCertificateIds(Set.of(0))
+          .setAcceptableSelfSignedCertificateIds(Set.of(0))
+          .build();
+  private static final CertificatesConfig TWO_EPOCH_CONFIG =
+      CertificatesConfig.builder()
+          .setSelfSignedCertificates(
+              Map.of(
+                  0, new SelfSignedCertificate(0, VALIDITY_PERIOD_0),
+                  1, new SelfSignedCertificate(1, VALIDITY_PERIOD_1)))
+          .setActiveSelfSignedCertificateIds(Set.of(0, 1))
+          .setAcceptableSelfSignedCertificateIds(Set.of(0, 1))
+          .build();
 
   @Before
   public void setUp() throws Exception {
@@ -139,10 +154,23 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
     return new FakeComplete(0, dummy);
   }
 
-  private record FakeSnapshot(Map<Integer, BackupHandle> bundleHandles) implements StorageSnapshot {
+  private record FakeSnapshot(
+      Map<Integer, BackupHandle> bundleHandles,
+      Map<CrossSignedCertificateId, CrossSignedCertHandle> crossSignedCertHandles)
+      implements StorageSnapshot {
+
+    FakeSnapshot(Map<Integer, BackupHandle> bundleHandles) {
+      this(bundleHandles, Map.of());
+    }
+
     @Override
     public BackupHandle getBundleHandle(int epoch) {
-      return bundleHandles.getOrDefault(epoch, mock(BackupHandle.Empty.class));
+      return bundleHandles.getOrDefault(epoch, emptyHandle(epoch));
+    }
+
+    @Override
+    public CrossSignedCertHandle getCrossSignedCertHandle(CrossSignedCertificateId id) {
+      return crossSignedCertHandles.getOrDefault(id, mock(CrossSignedCertHandle.Empty.class));
     }
   }
 
@@ -150,8 +178,14 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
     return new FakeSnapshot(Map.of(0, epoch0Handle));
   }
 
-  private BackupHandle.Empty stubEmptyStorage() throws Exception {
+  private static BackupHandle.Empty emptyHandle(int epoch) {
     BackupHandle.Empty empty = mock(BackupHandle.Empty.class);
+    when(empty.epoch()).thenReturn(epoch);
+    return empty;
+  }
+
+  private BackupHandle.Empty stubEmptyStorage() throws Exception {
+    BackupHandle.Empty empty = emptyHandle(0);
     when(storage.getSnapshot()).thenReturn(snapshotOf(empty));
     return empty;
   }
@@ -186,13 +220,10 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
     assertArrayEquals(dataKeyCiphertext, written.kmsEncryptedDataKey());
     assertArrayEquals(attestationDoc, written.attestationDocBytes());
 
-    CertificateFactory x509CertFactory = CertificateFactory.getInstance("X.509");
-    X509Certificate certificate =
-        (X509Certificate)
-            x509CertFactory.generateCertificate(new ByteArrayInputStream(written.certBytes()));
+    X509Certificate certificate = parseCertificate(written.certBytes());
     assertEquals("CN=Test CA", certificate.getSubjectX500Principal().getName());
-    assertEquals(TEST_VALIDITY_PERIOD.notBefore(), certificate.getNotBefore().toInstant());
-    assertEquals(TEST_VALIDITY_PERIOD.notAfter(), certificate.getNotAfter().toInstant());
+    assertEquals(VALIDITY_PERIOD_0.notBefore(), certificate.getNotBefore().toInstant());
+    assertEquals(VALIDITY_PERIOD_0.notAfter(), certificate.getNotAfter().toInstant());
     assertArrayEquals(
         KmsMeasurementBoundCertificateGenerator.toPemBytes(certificate), written.certBytes());
 
@@ -290,13 +321,26 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
 
   @Test
   public void generateCertificates_generationFails_doesNotReleaseLock() throws Exception {
-    stubEmptyStorage();
-    when(kmsClient.generateDataKey(KMS_KEY_ARN)).thenThrow(new KmsException("KMS error"));
+    BackupHandle.Empty empty0 = emptyHandle(0);
+    BackupHandle.Empty empty1 = emptyHandle(1);
+    when(storage.getSnapshot()).thenReturn(new FakeSnapshot(Map.of(0, empty0, 1, empty1)));
+    when(kmsClient.generateDataKey(KMS_KEY_ARN))
+        .thenReturn(
+            KmsGeneratedKey.builder()
+                .setPlaintext(generateAesKey())
+                .setCiphertext("generated-data-key-0".getBytes(StandardCharsets.UTF_8))
+                .build())
+        .thenThrow(new KmsException("KMS error on epoch 1"));
+    when(attestationCollector.collectBoundToPubkey(any(), any()))
+        .thenReturn(AttestationToken.fromBytes("att".getBytes(StandardCharsets.UTF_8)));
 
     RuntimeException thrown =
-        assertThrows(RuntimeException.class, () -> generator.generateCertificates(CONFIG));
+        assertThrows(
+            RuntimeException.class, () -> generator.generateCertificates(TWO_EPOCH_CONFIG));
 
     assertEquals(KmsException.class, thrown.getCause().getClass());
+    verify(empty0).write(any());
+    verify(empty1, never()).write(any());
     verify(storage).acquireLock();
     verify(storage, never()).releaseLock();
     verify(mockMetrics).recordGenerationEvent(Metrics.GenerationEvent.KMS_OPERATION_FAILED);
@@ -385,6 +429,109 @@ public class KmsMeasurementBoundCertificateGeneratorTest {
 
     assertEquals(IllegalStateException.class, thrown.getCause().getClass());
     verify(mockMetrics).recordGenerationEvent(Metrics.GenerationEvent.GENERAL_FAILURE);
+  }
+
+  @Test
+  public void generateCertificates_multipleEpochsInConfig_generatesMissingUnderSingleLock()
+      throws Exception {
+    // Leave epoch 1 inactive to verify that all configured self-signed certificates (including
+    // pre-rotation inactive epochs) are generated.
+    CertificatesConfig multiEpochConfig =
+        CertificatesConfig.builder()
+            .setSelfSignedCertificates(
+                Map.of(
+                    0, new SelfSignedCertificate(0, VALIDITY_PERIOD_0),
+                    1, new SelfSignedCertificate(1, VALIDITY_PERIOD_1),
+                    2, new SelfSignedCertificate(2, VALIDITY_PERIOD_2)))
+            .setActiveSelfSignedCertificateIds(Set.of(0, 2))
+            .setAcceptableSelfSignedCertificateIds(Set.of(0, 1, 2))
+            .build();
+
+    BackupHandle.Empty empty1 = emptyHandle(1);
+    BackupHandle.Empty empty2 = emptyHandle(2);
+    StorageSnapshot snapshot =
+        new FakeSnapshot(
+            Map.of(
+                0, completeHandle(),
+                1, empty1,
+                2, empty2));
+    when(storage.getSnapshot()).thenReturn(snapshot);
+
+    byte[] plaintextDataKey1 = generateAesKey();
+    byte[] dataKeyCiphertext1 = "generated-data-key-1".getBytes(StandardCharsets.UTF_8);
+    byte[] plaintextDataKey2 = generateAesKey();
+    byte[] dataKeyCiphertext2 = "generated-data-key-2".getBytes(StandardCharsets.UTF_8);
+    when(kmsClient.generateDataKey(KMS_KEY_ARN))
+        .thenReturn(
+            KmsGeneratedKey.builder()
+                .setPlaintext(plaintextDataKey1)
+                .setCiphertext(dataKeyCiphertext1)
+                .build())
+        .thenReturn(
+            KmsGeneratedKey.builder()
+                .setPlaintext(plaintextDataKey2)
+                .setCiphertext(dataKeyCiphertext2)
+                .build());
+    when(attestationCollector.collectBoundToPubkey(any(), any()))
+        .thenReturn(AttestationToken.fromBytes("att".getBytes(StandardCharsets.UTF_8)));
+
+    generator.generateCertificates(multiEpochConfig);
+
+    ArgumentCaptor<KeyBackup> backup1Captor = ArgumentCaptor.forClass(KeyBackup.class);
+    ArgumentCaptor<KeyBackup> backup2Captor = ArgumentCaptor.forClass(KeyBackup.class);
+    InOrder inOrder = inOrder(storage);
+    inOrder.verify(storage).getSnapshot();
+    inOrder.verify(storage).acquireLock();
+    inOrder.verify(storage).getSnapshot();
+    inOrder.verify(storage).releaseLock();
+
+    verify(empty1).write(backup1Captor.capture());
+    verify(empty2).write(backup2Captor.capture());
+    verify(kmsClient, times(2)).generateDataKey(KMS_KEY_ARN);
+    verify(mockMetrics).recordGenerationEvent(Metrics.GenerationEvent.SUCCESS);
+
+    X509Certificate cert1 = parseCertificate(backup1Captor.getValue().certBytes());
+    assertEquals(VALIDITY_PERIOD_1.notBefore(), cert1.getNotBefore().toInstant());
+    assertEquals(VALIDITY_PERIOD_1.notAfter(), cert1.getNotAfter().toInstant());
+
+    X509Certificate cert2 = parseCertificate(backup2Captor.getValue().certBytes());
+    assertEquals(VALIDITY_PERIOD_2.notBefore(), cert2.getNotBefore().toInstant());
+    assertEquals(VALIDITY_PERIOD_2.notAfter(), cert2.getNotAfter().toInstant());
+  }
+
+  @Test
+  public void
+      generateCertificates_oneOfMultipleEpochsAppearsUnderLock_generatesOnlyRemainingMissingEpoch()
+          throws Exception {
+    BackupHandle.Empty empty0 = emptyHandle(0);
+    BackupHandle.Empty empty1 = emptyHandle(1);
+    when(storage.getSnapshot())
+        .thenReturn(new FakeSnapshot(Map.of(0, empty0, 1, empty1)))
+        .thenReturn(new FakeSnapshot(Map.of(0, completeHandle(), 1, empty1)));
+
+    when(kmsClient.generateDataKey(KMS_KEY_ARN))
+        .thenReturn(
+            KmsGeneratedKey.builder()
+                .setPlaintext(generateAesKey())
+                .setCiphertext("generated-data-key-1".getBytes(StandardCharsets.UTF_8))
+                .build());
+    when(attestationCollector.collectBoundToPubkey(any(), any()))
+        .thenReturn(AttestationToken.fromBytes("att".getBytes(StandardCharsets.UTF_8)));
+
+    generator.generateCertificates(TWO_EPOCH_CONFIG);
+
+    verify(storage, times(2)).getSnapshot();
+    verify(storage).acquireLock();
+    verify(empty0, never()).write(any());
+    ArgumentCaptor<KeyBackup> backup1Captor = ArgumentCaptor.forClass(KeyBackup.class);
+    verify(empty1).write(backup1Captor.capture());
+    verify(storage).releaseLock();
+    verify(kmsClient, times(1)).generateDataKey(KMS_KEY_ARN);
+    verify(mockMetrics).recordGenerationEvent(Metrics.GenerationEvent.SUCCESS);
+
+    X509Certificate cert1 = parseCertificate(backup1Captor.getValue().certBytes());
+    assertEquals(VALIDITY_PERIOD_1.notBefore(), cert1.getNotBefore().toInstant());
+    assertEquals(VALIDITY_PERIOD_1.notAfter(), cert1.getNotAfter().toInstant());
   }
 
   private boolean isKeyMatchingCertificate(X509Certificate certificate, PrivateKey privateKey)
