@@ -37,7 +37,7 @@ public interface Metrics {
 
   enum LoadEvent {
     SUCCESS,
-    KEY_BACKUP_NOT_FOUND,
+    BACKUP_NOT_FOUND,
     S3_OPERATION_FAILED,
     KMS_OPERATION_FAILED,
     STORED_BACKUP_CORRUPTED,

@@ -1,0 +1,51 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.google.mbs;
+
+import com.google.mbs.domain.BackupBucketProperties;
+import java.util.Objects;
+
+public class BackupBucketPropertiesFactory {
+
+  private static final String DEFAULT_CACHE_CONTROL = "public, max-age=120";
+
+  private final String publicBucketName;
+  private final String privateBucketName;
+
+  public BackupBucketPropertiesFactory(String publicBucketName, String privateBucketName) {
+    this.publicBucketName = Objects.requireNonNull(publicBucketName);
+    this.privateBucketName = Objects.requireNonNull(privateBucketName);
+  }
+
+  /**
+   * @deprecated Use {@link #BackupBucketPropertiesFactory(String, String)} instead. This
+   *     constructor is kept for backward compatibility and uses the same bucket for both public and
+   *     private data.
+   */
+  @Deprecated
+  public BackupBucketPropertiesFactory(String bucketName) {
+    this(bucketName, bucketName);
+  }
+
+  public BackupBucketProperties create() {
+    return BackupBucketProperties.builder()
+        .setPublicBucketName(publicBucketName)
+        .setPrivateBucketName(privateBucketName)
+        .setCacheControl(DEFAULT_CACHE_CONTROL)
+        .build();
+  }
+}

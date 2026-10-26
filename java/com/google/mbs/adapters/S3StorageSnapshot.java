@@ -16,34 +16,36 @@
 
 package com.google.mbs.adapters;
 
-import com.google.mbs.domain.BackupHandle;
-import com.google.mbs.domain.CrossSignedCertHandle;
+import com.google.mbs.domain.CrossSignedCertificateBackupHandle;
 import com.google.mbs.domain.CrossSignedCertificateId;
+import com.google.mbs.domain.SelfSignedBundleBackupHandle;
 import com.google.mbs.domain.StorageSnapshot;
 import java.util.Map;
 import java.util.Objects;
 
 record S3StorageSnapshot(
-    Map<Integer, BackupHandle> bundleHandles,
-    Map<CrossSignedCertificateId, CrossSignedCertHandle> crossSignedCertHandles,
+    Map<Integer, SelfSignedBundleBackupHandle> selfSignedBundleBackupHandles,
+    Map<CrossSignedCertificateId, CrossSignedCertificateBackupHandle>
+        crossSignedCertificateBackupHandles,
     S3BackupWriter writer)
     implements StorageSnapshot {
 
   S3StorageSnapshot {
-    Objects.requireNonNull(bundleHandles);
-    Objects.requireNonNull(crossSignedCertHandles);
+    Objects.requireNonNull(selfSignedBundleBackupHandles);
+    Objects.requireNonNull(crossSignedCertificateBackupHandles);
     Objects.requireNonNull(writer);
   }
 
   @Override
-  public BackupHandle getBundleHandle(int epoch) {
-    BackupHandle handle = bundleHandles.get(epoch);
-    return handle != null ? handle : new S3EmptyBackupHandle(epoch, writer);
+  public SelfSignedBundleBackupHandle getSelfSignedBundleBackupHandle(int epoch) {
+    SelfSignedBundleBackupHandle handle = selfSignedBundleBackupHandles.get(epoch);
+    return handle != null ? handle : new S3EmptySelfSignedBundleBackupHandle(epoch, writer);
   }
 
   @Override
-  public CrossSignedCertHandle getCrossSignedCertHandle(CrossSignedCertificateId id) {
-    CrossSignedCertHandle handle = crossSignedCertHandles.get(id);
-    return handle != null ? handle : new S3EmptyCrossSignedCertHandle(id, writer);
+  public CrossSignedCertificateBackupHandle getCrossSignedCertificateBackupHandle(
+      CrossSignedCertificateId id) {
+    CrossSignedCertificateBackupHandle handle = crossSignedCertificateBackupHandles.get(id);
+    return handle != null ? handle : new S3EmptyCrossSignedCertificateBackupHandle(id, writer);
   }
 }

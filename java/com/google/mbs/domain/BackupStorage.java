@@ -1,0 +1,38 @@
+/*
+ * Copyright 2026 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.google.mbs.domain;
+
+/** Storage port for storing and retrieving MBS certificate, key, and attestation artifacts. */
+public interface BackupStorage {
+
+  /**
+   * Acquires an exclusive lock on backup storage for certificate generation.
+   *
+   * @throws BackupStorageAlreadyLockedException if the lock is already held by another instance
+   * @throws BackupAccessFailedException if the lock could not be written
+   */
+  void acquireLock() throws BackupStorageAlreadyLockedException, BackupAccessFailedException;
+
+  /**
+   * Releases the certificate generation lock upon successful artifact creation.
+   *
+   * @throws BackupAccessFailedException if the lock could not be removed
+   */
+  void releaseLock() throws BackupAccessFailedException;
+
+  StorageSnapshot getSnapshot() throws BackupAccessFailedException;
+}

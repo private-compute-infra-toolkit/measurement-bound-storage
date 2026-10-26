@@ -27,25 +27,29 @@ import static org.mockito.Mockito.mock;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.mbs.adapters.AeadSelfSignedBundleBackupSealer;
 import com.google.mbs.adapters.AwsAttestationCollector;
 import com.google.mbs.adapters.AwsKmsClient;
 import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
-import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.adapters.PemCertificateCodec;
 import com.google.mbs.adapters.S3BackupPaths;
-import com.google.mbs.adapters.S3KeyBackupStorage;
+import com.google.mbs.adapters.S3BackupStorage;
+import com.google.mbs.adapters.ScheduledCertificateMonitor;
 import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
 import com.google.mbs.domain.AttestationCollector;
+import com.google.mbs.domain.BackupBucketProperties;
+import com.google.mbs.domain.BackupStorage;
+import com.google.mbs.domain.CertificateCodec;
+import com.google.mbs.domain.CertificateGenerator;
 import com.google.mbs.domain.CertificateMonitor;
 import com.google.mbs.domain.CertificatesConfig;
 import com.google.mbs.domain.CertificatesConfigBucketProperties;
 import com.google.mbs.domain.CertificatesConfigProvider;
-import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.KeyBackupStorage;
 import com.google.mbs.domain.KmsClientInterface;
-import com.google.mbs.domain.MeasurementBoundBundle;
-import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
+import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleBackupSealer;
 import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
@@ -82,8 +86,7 @@ public class MbsModuleTest {
     assertNotNull(reloader);
     assertSame(provider, reloader);
 
-    MeasurementBoundCertificateGenerator generator =
-        injector.getInstance(MeasurementBoundCertificateGenerator.class);
+    CertificateGenerator generator = injector.getInstance(CertificateGenerator.class);
     assertNotNull(generator);
     assertSame(provider, generator);
 
@@ -99,25 +102,25 @@ public class MbsModuleTest {
     reloader.reload(config);
     TrustPackage package1 = provider.getActiveTrustPackage();
     assertNotNull(package1);
-    assertEquals(1, package1.bundles().size());
+    assertEquals(1, package1.selfSignedBundles().size());
     assertTrue(package1.crossSignedCertificates().isEmpty());
-    MeasurementBoundBundle mbc1 = package1.bundles().get(0);
-    assertNotNull(mbc1.getCertificate());
-    assertNotNull(mbc1.getPrivateKey());
+    SelfSignedBundle bundle1 = package1.selfSignedBundles().get(0);
+    assertNotNull(bundle1.certificate());
+    assertNotNull(bundle1.privateKey());
     var expectedValidity = config.selfSignedCertificates().get(0).validityPeriod();
-    assertEquals(expectedValidity.notBefore(), mbc1.getCertificate().getNotBefore().toInstant());
-    assertEquals(expectedValidity.notAfter(), mbc1.getCertificate().getNotAfter().toInstant());
+    assertEquals(expectedValidity.notBefore(), bundle1.certificate().getNotBefore().toInstant());
+    assertEquals(expectedValidity.notAfter(), bundle1.certificate().getNotAfter().toInstant());
 
     reloader.reload(config);
     TrustPackage package2 = provider.getActiveTrustPackage();
     assertNotNull(package2);
-    assertEquals(1, package2.bundles().size());
+    assertEquals(1, package2.selfSignedBundles().size());
     assertTrue(package2.crossSignedCertificates().isEmpty());
-    MeasurementBoundBundle mbc2 = package2.bundles().get(0);
-    assertNotNull(mbc2.getCertificate());
-    assertNotNull(mbc2.getPrivateKey());
+    SelfSignedBundle bundle2 = package2.selfSignedBundles().get(0);
+    assertNotNull(bundle2.certificate());
+    assertNotNull(bundle2.privateKey());
     assertNotEquals(
-        mbc1.getCertificate().getSerialNumber(), mbc2.getCertificate().getSerialNumber());
+        bundle1.certificate().getSerialNumber(), bundle2.certificate().getSerialNumber());
 
     ValidityPeriod validity0 =
         new ValidityPeriod(
@@ -136,20 +139,20 @@ public class MbsModuleTest {
             Set.of(0, 2));
     reloader.reload(multiEpochConfig);
     TrustPackage multiPackage = provider.getActiveTrustPackage();
-    assertEquals(2, multiPackage.bundles().size());
+    assertEquals(2, multiPackage.selfSignedBundles().size());
     Set<ValidityPeriod> loadedValidities =
-        multiPackage.bundles().stream()
+        multiPackage.selfSignedBundles().stream()
             .map(
                 b ->
                     new ValidityPeriod(
-                        b.getCertificate().getNotBefore().toInstant(),
-                        b.getCertificate().getNotAfter().toInstant()))
+                        b.certificate().getNotBefore().toInstant(),
+                        b.certificate().getNotAfter().toInstant()))
             .collect(Collectors.toSet());
     assertEquals(Set.of(validity0, validity2), loadedValidities);
 
     CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
     assertNotNull(scheduler);
-    assertTrue(scheduler instanceof MeasurementBoundCertificateMonitor);
+    assertTrue(scheduler instanceof ScheduledCertificateMonitor);
   }
 
   @Test
@@ -181,18 +184,26 @@ public class MbsModuleTest {
 
     TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
     assertNotNull(provider);
-    assertTrue(provider instanceof KmsMeasurementBoundCertificateProvider);
+    assertTrue(provider instanceof TrustPackageService);
 
     TrustPackageReloader reloader = injector.getInstance(TrustPackageReloader.class);
     assertNotNull(reloader);
     assertSame(provider, reloader);
 
-    MeasurementBoundCertificateGenerator generator =
-        injector.getInstance(MeasurementBoundCertificateGenerator.class);
+    CertificateGenerator generator = injector.getInstance(CertificateGenerator.class);
     assertNotNull(generator);
-    assertTrue(generator instanceof KmsMeasurementBoundCertificateGenerator);
+    assertTrue(generator instanceof DefaultCertificateGenerator);
 
-    KeyBackupBucketProperties bucketProps = injector.getInstance(KeyBackupBucketProperties.class);
+    CertificateCodec certificateCodec = injector.getInstance(CertificateCodec.class);
+    assertNotNull(certificateCodec);
+    assertTrue(certificateCodec instanceof PemCertificateCodec);
+
+    SelfSignedBundleBackupSealer backupSealer =
+        injector.getInstance(SelfSignedBundleBackupSealer.class);
+    assertNotNull(backupSealer);
+    assertTrue(backupSealer instanceof AeadSelfSignedBundleBackupSealer);
+
+    BackupBucketProperties bucketProps = injector.getInstance(BackupBucketProperties.class);
     assertNotNull(bucketProps);
     assertEquals("test-public-bucket", bucketProps.getPublicBucketName());
     assertEquals("test-private-bucket", bucketProps.getPrivateBucketName());
@@ -211,11 +222,11 @@ public class MbsModuleTest {
     assertSame(configProvider1, configProvider2);
     assertTrue(configProvider1 instanceof DefaultingCertificatesConfigProvider);
 
-    KeyBackupStorage storage1 = injector.getInstance(KeyBackupStorage.class);
-    KeyBackupStorage storage2 = injector.getInstance(KeyBackupStorage.class);
+    BackupStorage storage1 = injector.getInstance(BackupStorage.class);
+    BackupStorage storage2 = injector.getInstance(BackupStorage.class);
     assertNotNull(storage1);
     assertSame(storage1, storage2);
-    assertTrue(storage1 instanceof S3KeyBackupStorage);
+    assertTrue(storage1 instanceof S3BackupStorage);
 
     NitroSecurityModuleFactory nsmFactory = injector.getInstance(NitroSecurityModuleFactory.class);
     assertNotNull(nsmFactory);
@@ -227,7 +238,7 @@ public class MbsModuleTest {
 
     CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
     assertNotNull(scheduler);
-    assertTrue(scheduler instanceof MeasurementBoundCertificateMonitor);
+    assertTrue(scheduler instanceof ScheduledCertificateMonitor);
   }
 
   @Test

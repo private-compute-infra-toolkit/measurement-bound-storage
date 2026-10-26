@@ -20,7 +20,6 @@ java_library(
     name = "testing",
     testonly = True,
     srcs = [
-        "CertificateTestHelper.java",
         "FakeAttestationCollector.java",
         "FakeKmsClient.java",
         "S3TestClient.java",

@@ -25,14 +25,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.KeyBackupBucketPropertiesFactory;
+import com.google.mbs.BackupBucketPropertiesFactory;
+import com.google.mbs.domain.BackupAccessFailedException;
+import com.google.mbs.domain.BackupAlreadyExistsException;
+import com.google.mbs.domain.BackupBucketProperties;
+import com.google.mbs.domain.BackupStorageAlreadyLockedException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateId;
-import com.google.mbs.domain.KeyBackup;
-import com.google.mbs.domain.KeyBackupAccessFailedException;
-import com.google.mbs.domain.KeyBackupAlreadyExistsException;
-import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.StorageAlreadyLockedException;
+import com.google.mbs.domain.SelfSignedBundleBackup;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -76,13 +76,13 @@ public class S3BackupWriterTest {
 
   @Mock private S3Client s3Client;
 
-  private KeyBackupBucketProperties bucketProperties;
+  private BackupBucketProperties bucketProperties;
   private S3BackupWriter writer;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    bucketProperties = new KeyBackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
+    bucketProperties = new BackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
     writer = new S3BackupWriter(s3Client, bucketProperties, TEST_INSTANCE_ID);
   }
 
@@ -91,8 +91,9 @@ public class S3BackupWriterTest {
    * so it must become visible only after every other artifact is durable.
    */
   @Test
-  public void write_writesAllArtifactsToCorrectLocationsWithCertificateLast() throws Exception {
-    writer.write(TEST_EPOCH, sampleKeyBackup());
+  public void writeSelfSignedBundleBackup_writesAllArtifactsToCorrectLocationsWithCertificateLast()
+      throws Exception {
+    writer.writeSelfSignedBundleBackup(TEST_EPOCH, sampleSelfSignedBundleBackup());
 
     ArgumentCaptor<PutObjectRequest> requestCaptor =
         ArgumentCaptor.forClass(PutObjectRequest.class);
@@ -155,26 +156,29 @@ public class S3BackupWriterTest {
   }
 
   @Test
-  public void write_objectAlreadyExists_throwsAlreadyExistsException() {
+  public void writeSelfSignedBundleBackup_objectAlreadyExists_throwsAlreadyExistsException() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(S3Exception.builder().statusCode(412).message("PreconditionFailed").build());
 
     assertThrows(
-        KeyBackupAlreadyExistsException.class, () -> writer.write(TEST_EPOCH, sampleKeyBackup()));
+        BackupAlreadyExistsException.class,
+        () -> writer.writeSelfSignedBundleBackup(TEST_EPOCH, sampleSelfSignedBundleBackup()));
   }
 
   @Test
-  public void write_sdkException_throwsAccessFailed() {
+  public void writeSelfSignedBundleBackup_sdkException_throwsAccessFailed() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(SdkClientException.create("S3 write failure"));
 
     assertThrows(
-        KeyBackupAccessFailedException.class, () -> writer.write(TEST_EPOCH, sampleKeyBackup()));
+        BackupAccessFailedException.class,
+        () -> writer.writeSelfSignedBundleBackup(TEST_EPOCH, sampleSelfSignedBundleBackup()));
   }
 
   @Test
-  public void writeCrossSignedCert_writesToPublicBucketWithExpectedHeaders() throws Exception {
-    writer.writeCrossSignedCert(
+  public void writeCrossSignedCertificateBackup_writesToPublicBucketWithExpectedHeaders()
+      throws Exception {
+    writer.writeCrossSignedCertificateBackup(
         TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES));
 
     ArgumentCaptor<PutObjectRequest> requestCaptor =
@@ -182,7 +186,7 @@ public class S3BackupWriterTest {
     ArgumentCaptor<RequestBody> bodyCaptor = ArgumentCaptor.forClass(RequestBody.class);
     verify(s3Client).putObject(requestCaptor.capture(), bodyCaptor.capture());
 
-    String expectedKey = S3BackupPaths.getCrossSignedCertPath(TEST_CROSS_SIGNED_ID);
+    String expectedKey = S3BackupPaths.getCrossSignedCertificatePath(TEST_CROSS_SIGNED_ID);
     Map<String, PutObjectRequest> requestsByKey =
         Map.of(requestCaptor.getValue().key(), requestCaptor.getValue());
     Map<String, byte[]> contentsByKey =
@@ -192,26 +196,26 @@ public class S3BackupWriterTest {
   }
 
   @Test
-  public void writeCrossSignedCert_alreadyExists_throwsAlreadyExistsException() {
+  public void writeCrossSignedCertificateBackup_alreadyExists_throwsAlreadyExistsException() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(S3Exception.builder().statusCode(412).message("PreconditionFailed").build());
 
     assertThrows(
-        KeyBackupAlreadyExistsException.class,
+        BackupAlreadyExistsException.class,
         () ->
-            writer.writeCrossSignedCert(
+            writer.writeCrossSignedCertificateBackup(
                 TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES)));
   }
 
   @Test
-  public void writeCrossSignedCert_sdkException_throwsAccessFailed() {
+  public void writeCrossSignedCertificateBackup_sdkException_throwsAccessFailed() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(SdkClientException.create("S3 write failure"));
 
     assertThrows(
-        KeyBackupAccessFailedException.class,
+        BackupAccessFailedException.class,
         () ->
-            writer.writeCrossSignedCert(
+            writer.writeCrossSignedCertificateBackup(
                 TEST_CROSS_SIGNED_ID, new CrossSignedCertificateBackup(CROSS_SIGNED_CERT_BYTES)));
   }
 
@@ -235,11 +239,11 @@ public class S3BackupWriterTest {
   }
 
   @Test
-  public void acquireLock_alreadyLocked_throwsStorageAlreadyLockedException() {
+  public void acquireLock_alreadyLocked_throwsBackupStorageAlreadyLockedException() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(S3Exception.builder().statusCode(412).message("PreconditionFailed").build());
 
-    assertThrows(StorageAlreadyLockedException.class, () -> writer.acquireLock());
+    assertThrows(BackupStorageAlreadyLockedException.class, () -> writer.acquireLock());
   }
 
   @Test
@@ -247,7 +251,7 @@ public class S3BackupWriterTest {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(SdkClientException.create("S3 network failure"));
 
-    assertThrows(KeyBackupAccessFailedException.class, () -> writer.acquireLock());
+    assertThrows(BackupAccessFailedException.class, () -> writer.acquireLock());
   }
 
   @Test
@@ -266,11 +270,11 @@ public class S3BackupWriterTest {
     when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
         .thenThrow(SdkClientException.create("S3 network failure"));
 
-    assertThrows(KeyBackupAccessFailedException.class, () -> writer.releaseLock());
+    assertThrows(BackupAccessFailedException.class, () -> writer.releaseLock());
   }
 
-  private static KeyBackup sampleKeyBackup() {
-    return new KeyBackup(
+  private static SelfSignedBundleBackup sampleSelfSignedBundleBackup() {
+    return new SelfSignedBundleBackup(
         CERT_BYTES,
         KMS_ENCRYPTED_DATA_KEY_BYTES,
         AEAD_ENCRYPTED_PRIVATE_KEY_BYTES,

@@ -23,15 +23,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.KeyBackupBucketPropertiesFactory;
+import com.google.mbs.BackupBucketPropertiesFactory;
+import com.google.mbs.domain.BackupAccessFailedException;
+import com.google.mbs.domain.BackupBucketProperties;
+import com.google.mbs.domain.BackupIncompleteException;
+import com.google.mbs.domain.BackupNotFoundException;
+import com.google.mbs.domain.BackupPartiallyWrittenException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateId;
-import com.google.mbs.domain.KeyBackup;
-import com.google.mbs.domain.KeyBackupAccessFailedException;
-import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.KeyBackupIncompleteException;
-import com.google.mbs.domain.KeyBackupNotFoundException;
-import com.google.mbs.domain.KeyBackupPartiallyWrittenException;
+import com.google.mbs.domain.SelfSignedBundleBackup;
 import java.nio.charset.StandardCharsets;
 import org.junit.Before;
 import org.junit.Test;
@@ -68,26 +68,26 @@ public class S3BackupReaderTest {
 
   @Mock private S3Client s3Client;
 
-  private KeyBackupBucketProperties bucketProperties;
+  private BackupBucketProperties bucketProperties;
   private S3BackupReader reader;
 
   @Before
   public void setUp() {
     MockitoAnnotations.initMocks(this);
-    bucketProperties = new KeyBackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
+    bucketProperties = new BackupBucketPropertiesFactory(PUBLIC_BUCKET, PRIVATE_BUCKET).create();
     reader = new S3BackupReader(s3Client, bucketProperties);
   }
 
   @Test
-  public void read_allArtifactsPresent_returnsAggregate() throws Exception {
+  public void readSelfSignedBundleBackup_allArtifactsPresent_returnsAggregate() throws Exception {
     stubAllPresent();
 
-    KeyBackup keyBackup = reader.read(TEST_EPOCH);
+    SelfSignedBundleBackup backup = reader.readSelfSignedBundleBackup(TEST_EPOCH);
 
-    assertThat(keyBackup.certBytes()).isEqualTo(CERT_BYTES);
-    assertThat(keyBackup.kmsEncryptedDataKey()).isEqualTo(KMS_ENCRYPTED_DATA_KEY_BYTES);
-    assertThat(keyBackup.aeadEncryptedPrivateKey()).isEqualTo(AEAD_ENCRYPTED_PRIVATE_KEY_BYTES);
-    assertThat(keyBackup.attestationDocBytes()).isEqualTo(ATTESTATION_DOC_BYTES);
+    assertThat(backup.certBytes()).isEqualTo(CERT_BYTES);
+    assertThat(backup.kmsEncryptedDataKey()).isEqualTo(KMS_ENCRYPTED_DATA_KEY_BYTES);
+    assertThat(backup.aeadEncryptedPrivateKey()).isEqualTo(AEAD_ENCRYPTED_PRIVATE_KEY_BYTES);
+    assertThat(backup.attestationDocBytes()).isEqualTo(ATTESTATION_DOC_BYTES);
 
     verifyRead(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(TEST_EPOCH));
     verifyRead(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(TEST_EPOCH));
@@ -96,68 +96,75 @@ public class S3BackupReaderTest {
   }
 
   @Test
-  public void read_allArtifactsMissing_throwsKeyBackupNotFound() {
+  public void readSelfSignedBundleBackup_allArtifactsMissing_throwsBackupNotFound() {
     when(s3Client.getObject(any(GetObjectRequest.class), any(ResponseTransformer.class)))
         .thenThrow(NoSuchKeyException.builder().build());
 
-    assertThrows(KeyBackupNotFoundException.class, () -> reader.read(TEST_EPOCH));
+    assertThrows(
+        BackupNotFoundException.class, () -> reader.readSelfSignedBundleBackup(TEST_EPOCH));
   }
 
   @Test
-  public void read_certMissing_throwsKeyBackupPartiallyWritten() {
+  public void readSelfSignedBundleBackup_certMissing_throwsBackupPartiallyWritten() {
     stubAllPresentExcept(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(TEST_EPOCH));
 
-    assertThrows(KeyBackupPartiallyWrittenException.class, () -> reader.read(TEST_EPOCH));
+    assertThrows(
+        BackupPartiallyWrittenException.class, () -> reader.readSelfSignedBundleBackup(TEST_EPOCH));
   }
 
   @Test
-  public void read_nonCertArtifactMissing_throwsKeyBackupIncomplete() {
+  public void readSelfSignedBundleBackup_nonCertArtifactMissing_throwsBackupIncomplete() {
     stubAllPresentExcept(PRIVATE_BUCKET, S3BackupPaths.getKmsEncryptedDataKeyPath(TEST_EPOCH));
 
-    assertThrows(KeyBackupIncompleteException.class, () -> reader.read(TEST_EPOCH));
+    assertThrows(
+        BackupIncompleteException.class, () -> reader.readSelfSignedBundleBackup(TEST_EPOCH));
   }
 
   @Test
-  public void read_sdkException_throwsAccessFailed() {
+  public void readSelfSignedBundleBackup_sdkException_throwsAccessFailed() {
     when(s3Client.getObject(
             eq(getObjectRequest(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(TEST_EPOCH))),
             any(ResponseTransformer.class)))
         .thenThrow(SdkClientException.create("S3 network failure"));
 
-    assertThrows(KeyBackupAccessFailedException.class, () -> reader.read(TEST_EPOCH));
+    assertThrows(
+        BackupAccessFailedException.class, () -> reader.readSelfSignedBundleBackup(TEST_EPOCH));
   }
 
   @Test
-  public void readCrossSignedCert_present_returnsBackup() throws Exception {
-    String key = S3BackupPaths.getCrossSignedCertPath(TEST_CROSS_SIGNED_ID);
+  public void readCrossSignedCertificateBackup_present_returnsBackup() throws Exception {
+    String key = S3BackupPaths.getCrossSignedCertificatePath(TEST_CROSS_SIGNED_ID);
     stubPresent(PUBLIC_BUCKET, key, CROSS_SIGNED_CERT_BYTES);
 
-    CrossSignedCertificateBackup backup = reader.readCrossSignedCert(TEST_CROSS_SIGNED_ID);
+    CrossSignedCertificateBackup backup =
+        reader.readCrossSignedCertificateBackup(TEST_CROSS_SIGNED_ID);
 
     assertThat(backup.certBytes()).isEqualTo(CROSS_SIGNED_CERT_BYTES);
     verifyRead(PUBLIC_BUCKET, key);
   }
 
   @Test
-  public void readCrossSignedCert_missing_throwsKeyBackupNotFound() {
-    stubMissing(PUBLIC_BUCKET, S3BackupPaths.getCrossSignedCertPath(TEST_CROSS_SIGNED_ID));
+  public void readCrossSignedCertificateBackup_missing_throwsBackupNotFound() {
+    stubMissing(PUBLIC_BUCKET, S3BackupPaths.getCrossSignedCertificatePath(TEST_CROSS_SIGNED_ID));
 
     assertThrows(
-        KeyBackupNotFoundException.class, () -> reader.readCrossSignedCert(TEST_CROSS_SIGNED_ID));
+        BackupNotFoundException.class,
+        () -> reader.readCrossSignedCertificateBackup(TEST_CROSS_SIGNED_ID));
   }
 
   @Test
-  public void readCrossSignedCert_sdkException_throwsAccessFailed() {
+  public void readCrossSignedCertificateBackup_sdkException_throwsAccessFailed() {
     when(s3Client.getObject(
             eq(
                 getObjectRequest(
-                    PUBLIC_BUCKET, S3BackupPaths.getCrossSignedCertPath(TEST_CROSS_SIGNED_ID))),
+                    PUBLIC_BUCKET,
+                    S3BackupPaths.getCrossSignedCertificatePath(TEST_CROSS_SIGNED_ID))),
             any(ResponseTransformer.class)))
         .thenThrow(SdkClientException.create("S3 network failure"));
 
     assertThrows(
-        KeyBackupAccessFailedException.class,
-        () -> reader.readCrossSignedCert(TEST_CROSS_SIGNED_ID));
+        BackupAccessFailedException.class,
+        () -> reader.readCrossSignedCertificateBackup(TEST_CROSS_SIGNED_ID));
   }
 
   private static GetObjectRequest getObjectRequest(String bucket, String key) {

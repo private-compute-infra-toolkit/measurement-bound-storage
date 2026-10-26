@@ -17,10 +17,10 @@
 package com.google.mbs.dummy;
 
 import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.CertificateGenerator;
 import com.google.mbs.domain.CertificatesConfig;
 import com.google.mbs.domain.CertificatesConfigProvider;
-import com.google.mbs.domain.MeasurementBoundBundle;
-import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
+import com.google.mbs.domain.SelfSignedBundle;
 import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
@@ -46,7 +46,7 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 public class DummyTrustPackageProvider
     implements TrustPackageProvider,
         TrustPackageReloader,
-        MeasurementBoundCertificateGenerator,
+        CertificateGenerator,
         CertificatesConfigProvider {
   // RFC 5280 limits the serial number to 20 bytes (160 bits).
   // A positive BigInteger requires 1 bit for the sign, leaving 159 bits for entropy.
@@ -89,17 +89,17 @@ public class DummyTrustPackageProvider
   @Override
   public synchronized void reload(CertificatesConfig config) {
     try {
-      List<MeasurementBoundBundle> bundles = new ArrayList<>();
+      List<SelfSignedBundle> selfSignedBundles = new ArrayList<>();
       for (SelfSignedCertificate certConfig : config.activeSelfSignedCertificates()) {
-        bundles.add(generateNewCertificate(certConfig.validityPeriod()));
+        selfSignedBundles.add(generateSelfSignedBundle(certConfig.validityPeriod()));
       }
-      trustPackage = new TrustPackage(bundles, List.of());
+      trustPackage = new TrustPackage(selfSignedBundles, List.of());
     } catch (Exception e) {
-      throw new RuntimeException("Failed to reload certificate", e);
+      throw new RuntimeException("Failed to reload trust package", e);
     }
   }
 
-  private MeasurementBoundBundle generateNewCertificate(ValidityPeriod validityPeriod)
+  private SelfSignedBundle generateSelfSignedBundle(ValidityPeriod validityPeriod)
       throws Exception {
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
     keyGen.initialize(2048, secureRandom);
@@ -127,6 +127,6 @@ public class DummyTrustPackageProvider
         new JcaX509CertificateConverter().getCertificate(certBuilder.build(signer));
 
     AttestationToken token = AttestationToken.fromBytes("AttestationToken".getBytes());
-    return new MeasurementBoundBundle(certificate, privateKey, token);
+    return new SelfSignedBundle(certificate, privateKey, token);
   }
 }

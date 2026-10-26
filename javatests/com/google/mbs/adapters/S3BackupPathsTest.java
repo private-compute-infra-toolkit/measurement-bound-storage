@@ -45,21 +45,22 @@ public class S3BackupPathsTest {
   }
 
   @Test
-  public void getCrossSignedCertPath_returnsExpectedPath() {
-    assertThat(S3BackupPaths.getCrossSignedCertPath(new CrossSignedCertificateId(0, 1)))
+  public void getCrossSignedCertificatePath_returnsExpectedPath() {
+    assertThat(S3BackupPaths.getCrossSignedCertificatePath(new CrossSignedCertificateId(0, 1)))
         .isEqualTo("public/cross-signed/0_1/cross_signed_certificate.pem");
-    assertThat(S3BackupPaths.getCrossSignedCertPath(new CrossSignedCertificateId(1, 0)))
+    assertThat(S3BackupPaths.getCrossSignedCertificatePath(new CrossSignedCertificateId(1, 0)))
         .isEqualTo("public/cross-signed/1_0/cross_signed_certificate.pem");
   }
 
   @Test
-  public void getFileName_returnsExpectedFileNameForEachKeyBackupElement() {
-    assertThat(S3BackupPaths.getFileName(KeyBackupElement.CERT)).isEqualTo("root_certificate.pem");
-    assertThat(S3BackupPaths.getFileName(KeyBackupElement.ATTESTATION_DOC))
+  public void getFileName_returnsExpectedFileNameForEachSelfSignedBundleBackupElement() {
+    assertThat(S3BackupPaths.getFileName(SelfSignedBundleBackupElement.CERT))
+        .isEqualTo("root_certificate.pem");
+    assertThat(S3BackupPaths.getFileName(SelfSignedBundleBackupElement.ATTESTATION_DOC))
         .isEqualTo("attestation_doc.base64");
-    assertThat(S3BackupPaths.getFileName(KeyBackupElement.KMS_DATA_KEY))
+    assertThat(S3BackupPaths.getFileName(SelfSignedBundleBackupElement.KMS_DATA_KEY))
         .isEqualTo("root_data_key.kms");
-    assertThat(S3BackupPaths.getFileName(KeyBackupElement.PRIVATE_KEY))
+    assertThat(S3BackupPaths.getFileName(SelfSignedBundleBackupElement.PRIVATE_KEY))
         .isEqualTo("root_private_key.aes");
   }
 }

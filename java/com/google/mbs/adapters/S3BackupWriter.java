@@ -17,14 +17,14 @@
 package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
+import com.google.mbs.domain.BackupAccessFailedException;
+import com.google.mbs.domain.BackupAlreadyExistsException;
+import com.google.mbs.domain.BackupBucketProperties;
+import com.google.mbs.domain.BackupStorageAlreadyLockedException;
+import com.google.mbs.domain.BackupStorageException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateId;
-import com.google.mbs.domain.KeyBackup;
-import com.google.mbs.domain.KeyBackupAccessFailedException;
-import com.google.mbs.domain.KeyBackupAlreadyExistsException;
-import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.KeyBackupStorageException;
-import com.google.mbs.domain.StorageAlreadyLockedException;
+import com.google.mbs.domain.SelfSignedBundleBackup;
 import com.google.mbs.qualifier.InstanceId;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -38,7 +38,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
-/** Writes key backup artifacts to S3 and holds the generation lock. */
+/** Writes backup artifacts to S3 and holds the generation lock. */
 @Singleton
 public class S3BackupWriter {
 
@@ -48,14 +48,12 @@ public class S3BackupWriter {
   private static final String HEADER_IF_NONE_MATCH = "If-None-Match";
 
   private final S3Client s3Client;
-  private final KeyBackupBucketProperties bucketProperties;
+  private final BackupBucketProperties bucketProperties;
   private final String instanceId;
 
   @Inject
   public S3BackupWriter(
-      S3Client s3Client,
-      KeyBackupBucketProperties bucketProperties,
-      @InstanceId String instanceId) {
+      S3Client s3Client, BackupBucketProperties bucketProperties, @InstanceId String instanceId) {
     this.s3Client = Objects.requireNonNull(s3Client);
     this.bucketProperties = Objects.requireNonNull(bucketProperties);
     this.instanceId = Objects.requireNonNull(instanceId);
@@ -64,28 +62,30 @@ public class S3BackupWriter {
   /**
    * Takes the generation lock shared by all epochs.
    *
-   * @throws StorageAlreadyLockedException if the lock is already held by another instance
-   * @throws KeyBackupAccessFailedException if the lock could not be written
+   * @throws BackupStorageAlreadyLockedException if the lock is already held by another instance
+   * @throws BackupAccessFailedException if the lock could not be written
    */
-  public void acquireLock() throws StorageAlreadyLockedException, KeyBackupAccessFailedException {
+  public void acquireLock()
+      throws BackupStorageAlreadyLockedException, BackupAccessFailedException {
     String bucket = bucketProperties.getPrivateBucketName();
     String key = S3BackupPaths.getLockPath();
     try {
       putIfAbsent(bucket, key, instanceId.getBytes(StandardCharsets.UTF_8), "no-cache");
       logger.atInfo().log("Acquired S3 generation lock %s/%s", bucket, key);
-    } catch (KeyBackupAlreadyExistsException e) {
+    } catch (BackupAlreadyExistsException e) {
       logger.atInfo().log(
           "S3 generation lock %s/%s is already held by another instance", bucket, key);
-      throw new StorageAlreadyLockedException("Generation lock present at " + key, e.getCause());
+      throw new BackupStorageAlreadyLockedException(
+          "Generation lock present at " + key, e.getCause());
     }
   }
 
   /**
    * Releases the generation lock.
    *
-   * @throws KeyBackupAccessFailedException if the lock could not be removed
+   * @throws BackupAccessFailedException if the lock could not be removed
    */
-  public void releaseLock() throws KeyBackupAccessFailedException {
+  public void releaseLock() throws BackupAccessFailedException {
     try {
       s3Client.deleteObject(
           DeleteObjectRequest.builder()
@@ -99,51 +99,53 @@ public class S3BackupWriter {
       logger.atWarning().withCause(e).log(
           "Failed to delete S3 generation lock %s/%s",
           bucketProperties.getPrivateBucketName(), S3BackupPaths.getLockPath());
-      throw new KeyBackupAccessFailedException("Failed to delete S3 generation lock file", e);
+      throw new BackupAccessFailedException("Failed to delete S3 generation lock file", e);
     }
   }
 
   /**
-   * Writes the backup of {@code epoch}, certificate last so that it acts as a completion sentinel
-   * for concurrent readers.
+   * Writes the self-signed bundle backup of {@code epoch}, certificate last so that it acts as a
+   * completion sentinel for concurrent readers.
    *
-   * @throws KeyBackupAlreadyExistsException if any artifact for {@code epoch} already exists
-   * @throws KeyBackupAccessFailedException if any artifact could not be written
+   * @throws BackupAlreadyExistsException if any artifact for {@code epoch} already exists
+   * @throws BackupAccessFailedException if any artifact could not be written
    */
-  public void write(int epoch, KeyBackup keyBackup) throws KeyBackupStorageException {
+  public void writeSelfSignedBundleBackup(int epoch, SelfSignedBundleBackup backup)
+      throws BackupStorageException {
     logger.atInfo().log("Writing backup artifacts to S3 for epoch %d", epoch);
     putS3Object(
         bucketProperties.getPrivateBucketName(),
         S3BackupPaths.getAesEncryptedPrivateKeyPath(epoch),
-        keyBackup.aeadEncryptedPrivateKey());
+        backup.aeadEncryptedPrivateKey());
     putS3Object(
         bucketProperties.getPrivateBucketName(),
         S3BackupPaths.getKmsEncryptedDataKeyPath(epoch),
-        keyBackup.kmsEncryptedDataKey());
+        backup.kmsEncryptedDataKey());
     putS3Object(
         bucketProperties.getPublicBucketName(),
         S3BackupPaths.getAttestationDocPath(epoch),
-        keyBackup.attestationDocBytes());
+        backup.attestationDocBytes());
     // Written last, as the completion sentinel readers rely on.
     putS3Object(
         bucketProperties.getPublicBucketName(),
         S3BackupPaths.getRootCertPath(epoch),
-        keyBackup.certBytes());
+        backup.certBytes());
     logger.atInfo().log("Successfully wrote backup artifacts to S3 for epoch %d", epoch);
   }
 
   /**
-   * Writes the cross-signed certificate for {@code id}.
+   * Writes the cross-signed certificate backup for {@code id}.
    *
-   * @throws KeyBackupAlreadyExistsException if the certificate for {@code id} already exists
-   * @throws KeyBackupAccessFailedException if the certificate could not be written
+   * @throws BackupAlreadyExistsException if the certificate for {@code id} already exists
+   * @throws BackupAccessFailedException if the certificate could not be written
    */
-  public void writeCrossSignedCert(CrossSignedCertificateId id, CrossSignedCertificateBackup backup)
-      throws KeyBackupStorageException {
+  public void writeCrossSignedCertificateBackup(
+      CrossSignedCertificateId id, CrossSignedCertificateBackup backup)
+      throws BackupStorageException {
     logger.atInfo().log("Writing cross-signed certificate to S3 for %s", id.toKeyString());
     putS3Object(
         bucketProperties.getPublicBucketName(),
-        S3BackupPaths.getCrossSignedCertPath(id),
+        S3BackupPaths.getCrossSignedCertificatePath(id),
         backup.certBytes());
     logger.atInfo().log(
         "Successfully wrote cross-signed certificate to S3 for %s", id.toKeyString());
@@ -157,12 +159,12 @@ public class S3BackupWriter {
   }
 
   private void putS3Object(String bucket, String key, byte[] content)
-      throws KeyBackupAlreadyExistsException, KeyBackupAccessFailedException {
+      throws BackupAlreadyExistsException, BackupAccessFailedException {
     putIfAbsent(bucket, key, content, bucketProperties.getCacheControl());
   }
 
   private void putIfAbsent(String bucket, String key, byte[] content, String cacheControl)
-      throws KeyBackupAlreadyExistsException, KeyBackupAccessFailedException {
+      throws BackupAlreadyExistsException, BackupAccessFailedException {
     try {
       PutObjectRequest request =
           PutObjectRequest.builder()
@@ -175,11 +177,11 @@ public class S3BackupWriter {
       s3Client.putObject(request, RequestBody.fromBytes(content));
     } catch (SdkException e) {
       if (e instanceof S3Exception s3Exception && isPreconditionFailed(s3Exception)) {
-        throw new KeyBackupAlreadyExistsException(
+        throw new BackupAlreadyExistsException(
             "Object already exists: " + key + " in bucket: " + bucket, e);
       }
       logger.atWarning().withCause(e).log("Failed to put S3 object %s/%s", bucket, key);
-      throw new KeyBackupAccessFailedException(
+      throw new BackupAccessFailedException(
           "Failed to put object: " + key + " in bucket: " + bucket, e);
     }
   }

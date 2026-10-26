@@ -17,9 +17,34 @@ load("@rules_java//java:defs.bzl", "java_test")
 package(default_visibility = ["//visibility:public"])
 
 java_test(
-    name = "S3KeyBackupStorageTest",
+    name = "PemCertificateCodecTest",
     size = "small",
-    srcs = ["S3KeyBackupStorageTest.java"],
+    srcs = ["PemCertificateCodecTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+    ],
+)
+
+java_test(
+    name = "AeadSelfSignedBundleBackupSealerTest",
+    size = "small",
+    srcs = ["AeadSelfSignedBundleBackupSealerTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:com_google_crypto_tink_tink",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "S3BackupStorageTest",
+    size = "small",
+    srcs = ["S3BackupStorageTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/adapters",
@@ -34,9 +59,9 @@ java_test(
 )
 
 java_test(
-    name = "S3CompleteBackupHandleTest",
+    name = "S3CompleteSelfSignedBundleBackupHandleTest",
     size = "small",
-    srcs = ["S3CompleteBackupHandleTest.java"],
+    srcs = ["S3CompleteSelfSignedBundleBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
@@ -47,9 +72,9 @@ java_test(
 )
 
 java_test(
-    name = "S3CompleteCrossSignedCertHandleTest",
+    name = "S3CompleteCrossSignedCertificateBackupHandleTest",
     size = "small",
-    srcs = ["S3CompleteCrossSignedCertHandleTest.java"],
+    srcs = ["S3CompleteCrossSignedCertificateBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
@@ -60,9 +85,9 @@ java_test(
 )
 
 java_test(
-    name = "S3EmptyBackupHandleTest",
+    name = "S3EmptySelfSignedBundleBackupHandleTest",
     size = "small",
-    srcs = ["S3EmptyBackupHandleTest.java"],
+    srcs = ["S3EmptySelfSignedBundleBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
@@ -72,9 +97,9 @@ java_test(
 )
 
 java_test(
-    name = "S3EmptyCrossSignedCertHandleTest",
+    name = "S3EmptyCrossSignedCertificateBackupHandleTest",
     size = "small",
-    srcs = ["S3EmptyCrossSignedCertHandleTest.java"],
+    srcs = ["S3EmptyCrossSignedCertificateBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
@@ -162,9 +187,9 @@ java_test(
 )
 
 java_test(
-    name = "MeasurementBoundCertificateMonitorTest",
+    name = "ScheduledCertificateMonitorTest",
     size = "small",
-    srcs = ["MeasurementBoundCertificateMonitorTest.java"],
+    srcs = ["ScheduledCertificateMonitorTest.java"],
     deps = [
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
@@ -197,7 +222,6 @@ java_test(
     size = "small",
     srcs = ["S3CertificatesConfigProviderTest.java"],
     deps = [
-        "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
         "@maven//:com_google_truth_truth",

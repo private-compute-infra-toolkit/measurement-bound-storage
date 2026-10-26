@@ -19,32 +19,35 @@ package com.google.mbs.domain;
 import java.util.Map;
 
 /**
- * Point-in-time view of backup storage, keyed by epoch for self-signed key backups and by {@link
- * CrossSignedCertificateId} for cross-signed certificates.
+ * Point-in-time view of backup storage, keyed by epoch for self-signed bundle backups and by {@link
+ * CrossSignedCertificateId} for cross-signed certificate backups.
  *
  * <p>A snapshot is not refreshed by operations performed on the handles it returns; obtain a new
- * snapshot from {@link KeyBackupStorage#getSnapshot()} to observe later changes.
+ * snapshot from {@link BackupStorage#getSnapshot()} to observe later changes.
  */
 public interface StorageSnapshot {
 
   /**
-   * Returns the handle for {@code epoch}, or a {@link BackupHandle.Empty} if nothing was stored for
-   * it when the snapshot was taken.
+   * Returns the handle for {@code epoch}, or a {@link SelfSignedBundleBackupHandle.Empty} if
+   * nothing was stored for it when the snapshot was taken.
    */
-  BackupHandle getBundleHandle(int epoch);
+  SelfSignedBundleBackupHandle getSelfSignedBundleBackupHandle(int epoch);
 
   /** Returns the handles of the epochs present in storage when the snapshot was taken. */
-  Map<Integer, BackupHandle> bundleHandles();
+  Map<Integer, SelfSignedBundleBackupHandle> selfSignedBundleBackupHandles();
 
   /**
    * Returns the handle for the cross-signed certificate {@code id}, or a {@link
-   * CrossSignedCertHandle.Empty} if nothing was stored for it when the snapshot was taken.
+   * CrossSignedCertificateBackupHandle.Empty} if nothing was stored for it when the snapshot was
+   * taken.
    */
-  CrossSignedCertHandle getCrossSignedCertHandle(CrossSignedCertificateId id);
+  CrossSignedCertificateBackupHandle getCrossSignedCertificateBackupHandle(
+      CrossSignedCertificateId id);
 
   /**
    * Returns the handles of the cross-signed certificates present in storage when the snapshot was
    * taken.
    */
-  Map<CrossSignedCertificateId, CrossSignedCertHandle> crossSignedCertHandles();
+  Map<CrossSignedCertificateId, CrossSignedCertificateBackupHandle>
+      crossSignedCertificateBackupHandles();
 }

@@ -20,16 +20,16 @@ import java.security.cert.X509Certificate;
 import java.util.List;
 
 /**
- * Container holding lists of active measurement-bound bundles and cross-certificates.
+ * Container holding lists of active self-signed bundles and cross-signed certificates.
  *
- * @param bundles list of active measurement-bound bundles
+ * @param selfSignedBundles list of active self-signed bundles
  * @param crossSignedCertificates list of cross-signed X.509 certificates
  */
 public record TrustPackage(
-    List<MeasurementBoundBundle> bundles, List<X509Certificate> crossSignedCertificates) {
+    List<SelfSignedBundle> selfSignedBundles, List<X509Certificate> crossSignedCertificates) {
 
   public TrustPackage {
-    bundles = List.copyOf(bundles);
+    selfSignedBundles = List.copyOf(selfSignedBundles);
     crossSignedCertificates = List.copyOf(crossSignedCertificates);
   }
 }

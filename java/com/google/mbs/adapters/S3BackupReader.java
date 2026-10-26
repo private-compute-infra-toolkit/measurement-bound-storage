@@ -17,15 +17,15 @@
 package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
+import com.google.mbs.domain.BackupAccessFailedException;
+import com.google.mbs.domain.BackupBucketProperties;
+import com.google.mbs.domain.BackupIncompleteException;
+import com.google.mbs.domain.BackupNotFoundException;
+import com.google.mbs.domain.BackupPartiallyWrittenException;
+import com.google.mbs.domain.BackupStorageException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateId;
-import com.google.mbs.domain.KeyBackup;
-import com.google.mbs.domain.KeyBackupAccessFailedException;
-import com.google.mbs.domain.KeyBackupBucketProperties;
-import com.google.mbs.domain.KeyBackupIncompleteException;
-import com.google.mbs.domain.KeyBackupNotFoundException;
-import com.google.mbs.domain.KeyBackupPartiallyWrittenException;
-import com.google.mbs.domain.KeyBackupStorageException;
+import com.google.mbs.domain.SelfSignedBundleBackup;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.ArrayList;
@@ -38,36 +38,36 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
-/** Reads key backup artifacts from S3. */
+/** Reads backup artifacts from S3. */
 @Singleton
 public class S3BackupReader {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
   private final S3Client s3Client;
-  private final KeyBackupBucketProperties bucketProperties;
+  private final BackupBucketProperties bucketProperties;
 
   @Inject
-  public S3BackupReader(S3Client s3Client, KeyBackupBucketProperties bucketProperties) {
+  public S3BackupReader(S3Client s3Client, BackupBucketProperties bucketProperties) {
     this.s3Client = Objects.requireNonNull(s3Client);
     this.bucketProperties = Objects.requireNonNull(bucketProperties);
   }
 
   /**
-   * Reads the backup of {@code epoch}.
+   * Reads the self-signed bundle backup of {@code epoch}.
    *
    * <p>Callers have already established that the backup is complete via bucket listing, but storage
    * may have changed since, so missing artifacts are classified according to the state actually
    * observed.
    *
-   * @throws KeyBackupNotFoundException if all artifacts are missing
-   * @throws KeyBackupPartiallyWrittenException if the certificate is missing while other artifacts
+   * @throws BackupNotFoundException if all artifacts are missing
+   * @throws BackupPartiallyWrittenException if the certificate is missing while other artifacts
    *     exist
-   * @throws KeyBackupIncompleteException if the certificate exists while other artifacts are
-   *     missing
-   * @throws KeyBackupAccessFailedException if the artifacts could not be read
+   * @throws BackupIncompleteException if the certificate exists while other artifacts are missing
+   * @throws BackupAccessFailedException if the artifacts could not be read
    */
-  public KeyBackup read(int epoch) throws KeyBackupStorageException {
+  public SelfSignedBundleBackup readSelfSignedBundleBackup(int epoch)
+      throws BackupStorageException {
     logger.atInfo().log("Reading backup artifacts from S3 for epoch %d", epoch);
     Optional<byte[]> certBytes =
         tryGetS3Object(
@@ -100,17 +100,21 @@ public class S3BackupReader {
 
     if (!missing.isEmpty()) {
       if (missing.size() == 4) {
-        throw new KeyBackupNotFoundException("Key backup absent for epoch " + epoch);
+        throw new BackupNotFoundException("Self-signed bundle backup absent for epoch " + epoch);
       }
       if (certBytes.isEmpty()) {
-        throw new KeyBackupPartiallyWrittenException(
-            "Key backup partially written for epoch " + epoch + ", missing " + missing);
+        throw new BackupPartiallyWrittenException(
+            "Self-signed bundle backup partially written for epoch "
+                + epoch
+                + ", missing "
+                + missing);
       }
-      throw new KeyBackupIncompleteException("Key backup incomplete, missing " + missing);
+      throw new BackupIncompleteException(
+          "Self-signed bundle backup incomplete, missing " + missing);
     }
 
     logger.atInfo().log("Successfully read backup artifacts from S3 for epoch %d", epoch);
-    return new KeyBackup(
+    return new SelfSignedBundleBackup(
         certBytes.get(),
         kmsEncryptedDataKey.get(),
         aeadEncryptedPrivateKey.get(),
@@ -118,20 +122,20 @@ public class S3BackupReader {
   }
 
   /**
-   * Reads the cross-signed certificate for {@code id}.
+   * Reads the cross-signed certificate backup for {@code id}.
    *
-   * @throws KeyBackupNotFoundException if the certificate is absent
-   * @throws KeyBackupAccessFailedException if the certificate could not be read
+   * @throws BackupNotFoundException if the certificate is absent
+   * @throws BackupAccessFailedException if the certificate could not be read
    */
-  public CrossSignedCertificateBackup readCrossSignedCert(CrossSignedCertificateId id)
-      throws KeyBackupStorageException {
+  public CrossSignedCertificateBackup readCrossSignedCertificateBackup(CrossSignedCertificateId id)
+      throws BackupStorageException {
     logger.atInfo().log("Reading cross-signed certificate from S3 for %s", id.toKeyString());
     Optional<byte[]> certBytes =
         tryGetS3Object(
-            bucketProperties.getPublicBucketName(), S3BackupPaths.getCrossSignedCertPath(id));
+            bucketProperties.getPublicBucketName(),
+            S3BackupPaths.getCrossSignedCertificatePath(id));
     if (certBytes.isEmpty()) {
-      throw new KeyBackupNotFoundException(
-          "Cross-signed certificate absent for " + id.toKeyString());
+      throw new BackupNotFoundException("Cross-signed certificate absent for " + id.toKeyString());
     }
     logger.atInfo().log(
         "Successfully read cross-signed certificate from S3 for %s", id.toKeyString());
@@ -139,7 +143,7 @@ public class S3BackupReader {
   }
 
   private Optional<byte[]> tryGetS3Object(String bucket, String key)
-      throws KeyBackupAccessFailedException {
+      throws BackupAccessFailedException {
     try {
       return Optional.of(
           s3Client
@@ -151,7 +155,7 @@ public class S3BackupReader {
       return Optional.empty();
     } catch (SdkException e) {
       logger.atWarning().withCause(e).log("Failed to read S3 object %s/%s", bucket, key);
-      throw new KeyBackupAccessFailedException(
+      throw new BackupAccessFailedException(
           "Failed to read object: " + key + " from bucket: " + bucket, e);
     }
   }

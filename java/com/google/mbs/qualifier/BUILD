@@ -22,7 +22,6 @@ java_library(
         "AttestationUserData.java",
         "InstanceId.java",
         "KmsKeyArn.java",
-        "MbsRoot.java",
         "PrivateBackupBucket.java",
         "PublicBackupBucket.java",
     ],

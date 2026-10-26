@@ -17,42 +17,45 @@ load("@rules_java//java:defs.bzl", "java_test")
 package(default_visibility = ["//visibility:public"])
 
 java_test(
-    name = "KmsMeasurementBoundCertificateGeneratorTest",
+    name = "DefaultCertificateGeneratorTest",
     size = "small",
-    srcs = ["KmsMeasurementBoundCertificateGeneratorTest.java"],
+    srcs = ["DefaultCertificateGeneratorTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/domain",
-        "//javatests/com/google/mbs/testing",
-        "@maven//:com_google_crypto_tink_tink",
-        "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
-        "@maven//:org_bouncycastle_bcpkix_jdk18on",
-        "@maven//:org_bouncycastle_bcprov_jdk18on",
         "@maven//:org_mockito_mockito_core",
     ],
 )
 
 java_test(
-    name = "KmsMeasurementBoundCertificateProviderTest",
+    name = "SelfSignedBundleBackupGeneratorTest",
     size = "small",
-    srcs = ["KmsMeasurementBoundCertificateProviderTest.java"],
+    srcs = ["SelfSignedBundleBackupGeneratorTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/domain",
-        "@maven//:com_google_crypto_tink_tink",
-        "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
-        "@maven//:org_bouncycastle_bcpkix_jdk18on",
-        "@maven//:org_bouncycastle_bcprov_jdk18on",
         "@maven//:org_mockito_mockito_core",
     ],
 )
 
 java_test(
-    name = "KeyBackupBucketPropertiesFactoryTest",
+    name = "TrustPackageServiceTest",
     size = "small",
-    srcs = ["KeyBackupBucketPropertiesFactoryTest.java"],
+    srcs = ["TrustPackageServiceTest.java"],
+    deps = [
+        "//java/com/google/mbs:certmanagement",
+        "//java/com/google/mbs/domain",
+        "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "BackupBucketPropertiesFactoryTest",
+    size = "small",
+    srcs = ["BackupBucketPropertiesFactoryTest.java"],
     deps = [
         "//java/com/google/mbs:certmanagement",
     ],
@@ -135,9 +138,9 @@ java_test(
 )
 
 java_test(
-    name = "BackupHandleTest",
+    name = "SelfSignedBundleBackupHandleTest",
     size = "small",
-    srcs = ["BackupHandleTest.java"],
+    srcs = ["SelfSignedBundleBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/domain",
         "@maven//:com_google_truth_truth",
@@ -147,9 +150,9 @@ java_test(
 )
 
 java_test(
-    name = "CrossSignedCertHandleTest",
+    name = "CrossSignedCertificateBackupHandleTest",
     size = "small",
-    srcs = ["CrossSignedCertHandleTest.java"],
+    srcs = ["CrossSignedCertificateBackupHandleTest.java"],
     deps = [
         "//java/com/google/mbs/domain",
         "@maven//:com_google_truth_truth",

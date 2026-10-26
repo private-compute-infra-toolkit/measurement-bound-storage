@@ -23,8 +23,8 @@ package com.google.mbs.domain;
 public interface TrustPackageProvider {
 
   /**
-   * Returns the current active trust package containing measurement-bound bundles and
-   * cross-certificates.
+   * Returns the current active trust package containing self-signed bundles and cross-signed
+   * certificates.
    *
    * <p>This method is lock-free and non-blocking. It returns the current in-memory active trust
    * package.

@@ -17,10 +17,10 @@
 package com.google.mbs.dummy;
 
 import com.google.inject.AbstractModule;
-import com.google.mbs.adapters.MeasurementBoundCertificateMonitor;
+import com.google.mbs.adapters.ScheduledCertificateMonitor;
+import com.google.mbs.domain.CertificateGenerator;
 import com.google.mbs.domain.CertificateMonitor;
 import com.google.mbs.domain.CertificatesConfigProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateGenerator;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.TrustPackageProvider;
 import com.google.mbs.domain.TrustPackageReloader;
@@ -34,11 +34,11 @@ public final class DummyMbsModule extends AbstractModule {
     bind(DummyTrustPackageProvider.class).in(Singleton.class);
     bind(TrustPackageProvider.class).to(DummyTrustPackageProvider.class);
     bind(TrustPackageReloader.class).to(DummyTrustPackageProvider.class);
-    bind(MeasurementBoundCertificateGenerator.class).to(DummyTrustPackageProvider.class);
+    bind(CertificateGenerator.class).to(DummyTrustPackageProvider.class);
     bind(CertificatesConfigProvider.class).to(DummyTrustPackageProvider.class);
 
     bind(Metrics.class).to(NoOpMetrics.class).in(Singleton.class);
 
-    bind(CertificateMonitor.class).to(MeasurementBoundCertificateMonitor.class).in(Singleton.class);
+    bind(CertificateMonitor.class).to(ScheduledCertificateMonitor.class).in(Singleton.class);
   }
 }

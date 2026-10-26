@@ -25,10 +25,11 @@ java_plugin(
 java_library(
     name = "certmanagement",
     srcs = [
-        "KeyBackupBucketPropertiesFactory.java",
-        "KmsMeasurementBoundCertificateGenerator.java",
-        "KmsMeasurementBoundCertificateProvider.java",
+        "BackupBucketPropertiesFactory.java",
+        "DefaultCertificateGenerator.java",
         "MbsCertificateFactory.java",
+        "SelfSignedBundleBackupGenerator.java",
+        "TrustPackageService.java",
     ],
     plugins = [":auto_value_plugin"],
     exports = [
@@ -42,7 +43,6 @@ java_library(
         "//java/com/google/mbs/domain",
         "//java/com/google/mbs/qualifier",
         "@maven//:com_google_auto_value_auto_value_annotations",
-        "@maven//:com_google_crypto_tink_tink",
         "@maven//:com_google_flogger_flogger",
         "@maven//:com_google_guava_guava",
         "@maven//:jakarta_inject_jakarta_inject_api",
