@@ -19,7 +19,6 @@ package com.google.mbs.adapters;
 import com.google.common.flogger.FluentLogger;
 import com.google.mbs.domain.BackupAccessFailedException;
 import com.google.mbs.domain.BackupAlreadyExistsException;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupStorageAlreadyLockedException;
 import com.google.mbs.domain.BackupStorageException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;

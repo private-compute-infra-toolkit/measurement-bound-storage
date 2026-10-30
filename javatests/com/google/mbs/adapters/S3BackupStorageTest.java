@@ -25,9 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.BackupBucketPropertiesFactory;
 import com.google.mbs.domain.BackupAccessFailedException;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupStorageAlreadyLockedException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateBackupHandle;
@@ -168,11 +166,8 @@ public class S3BackupStorageTest {
 
     assertThat(handle).isInstanceOf(SelfSignedBundleBackupHandle.Complete.class);
     assertThat(handle.epoch()).isEqualTo(0);
-    assertThat(snapshot.selfSignedBundleBackupHandles().keySet()).containsExactly(0);
     assertThat(crossSignedHandle).isInstanceOf(CrossSignedCertificateBackupHandle.Complete.class);
     assertThat(crossSignedHandle.id()).isEqualTo(CROSS_SIGNED_ID);
-    assertThat(snapshot.crossSignedCertificateBackupHandles().keySet())
-        .containsExactly(CROSS_SIGNED_ID);
   }
 
   @Test
@@ -211,7 +206,6 @@ public class S3BackupStorageTest {
     stubListings(List.of(), List.of());
     StorageSnapshot snapshotAfterRemoval = storage.getSnapshot();
 
-    assertThat(snapshotAfterRemoval.selfSignedBundleBackupHandles()).isEmpty();
     assertThat(snapshotAfterRemoval.getSelfSignedBundleBackupHandle(0))
         .isInstanceOf(SelfSignedBundleBackupHandle.Empty.class);
   }
@@ -226,7 +220,6 @@ public class S3BackupStorageTest {
 
     assertThat(emptyEpoch1).isInstanceOf(SelfSignedBundleBackupHandle.Empty.class);
     assertThat(emptyEpoch1.epoch()).isEqualTo(1);
-    assertThat(snapshot.selfSignedBundleBackupHandles().keySet()).containsExactly(0);
     ((SelfSignedBundleBackupHandle.Empty) emptyEpoch1).write(SELF_SIGNED_BUNDLE_BACKUP);
     verify(writer).writeSelfSignedBundleBackup(1, SELF_SIGNED_BUNDLE_BACKUP);
   }
@@ -291,7 +284,6 @@ public class S3BackupStorageTest {
     stubListings(List.of(), List.of());
     StorageSnapshot snapshotAfterRemoval = storage.getSnapshot();
 
-    assertThat(snapshotAfterRemoval.crossSignedCertificateBackupHandles()).isEmpty();
     assertThat(snapshotAfterRemoval.getCrossSignedCertificateBackupHandle(CROSS_SIGNED_ID))
         .isInstanceOf(CrossSignedCertificateBackupHandle.Empty.class);
   }
@@ -309,8 +301,6 @@ public class S3BackupStorageTest {
 
     assertThat(emptyHandle).isInstanceOf(CrossSignedCertificateBackupHandle.Empty.class);
     assertThat(emptyHandle.id()).isEqualTo(absentId);
-    assertThat(snapshot.crossSignedCertificateBackupHandles().keySet())
-        .containsExactly(CROSS_SIGNED_ID);
     ((CrossSignedCertificateBackupHandle.Empty) emptyHandle).write(CROSS_SIGNED_BACKUP);
     verify(writer).writeCrossSignedCertificateBackup(absentId, CROSS_SIGNED_BACKUP);
   }

@@ -14,29 +14,22 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
-import com.google.mbs.domain.AttestationCollector;
-import com.google.mbs.domain.AttestationToken;
-import com.google.mbs.domain.KmsException;
-import com.google.mbs.domain.SelfSignedBundle;
-import com.google.mbs.domain.SelfSignedBundleBackup;
-import com.google.mbs.domain.SelfSignedBundleBackupSealer;
-import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.qualifier.AttestationUserData;
 import jakarta.inject.Inject;
 import java.util.Objects;
 
 class SelfSignedBundleBackupGenerator {
 
-  private final MbsCertificateFactory certificateFactory;
+  private final SelfSignedCertificateFactory certificateFactory;
   private final AttestationCollector attestationCollector;
   private final byte[] userDataBoundToAttestation;
   private final SelfSignedBundleBackupSealer backupSealer;
 
   @Inject
   SelfSignedBundleBackupGenerator(
-      MbsCertificateFactory certificateFactory,
+      SelfSignedCertificateFactory certificateFactory,
       AttestationCollector attestationCollector,
       @AttestationUserData byte[] userDataBoundToAttestation,
       SelfSignedBundleBackupSealer backupSealer) {
@@ -47,7 +40,7 @@ class SelfSignedBundleBackupGenerator {
   }
 
   SelfSignedBundleBackup generate(SelfSignedCertificate certConfig) throws KmsException {
-    MbsCertificateFactory.X509CertificateAndPrivateKey certAndKey =
+    SelfSignedCertificateFactory.X509CertificateAndPrivateKey certAndKey =
         certificateFactory.generate(certConfig);
     AttestationToken token =
         attestationCollector.collectBoundToPubkey(

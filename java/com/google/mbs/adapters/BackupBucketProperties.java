@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.mbs.domain;
+package com.google.mbs.adapters;
 
 import com.google.auto.value.AutoValue;
 

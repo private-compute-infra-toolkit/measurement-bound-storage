@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.cert.X509Certificate;
+import java.util.HexFormat;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -250,5 +251,25 @@ public class AeadSelfSignedBundleBackupSealerTest {
             VALID_CERT_BYTES);
 
     assertThrows(BackupCorruptedException.class, () -> sealer.unseal(mismatchedLegacyBackup));
+  }
+
+  @Test
+  public void buildAssociatedData_constructsExpectedWireFormat() {
+    HexFormat hex = HexFormat.of();
+    byte[] certBytes = hex.parseHex("feed");
+    byte[] attestationBytes = hex.parseHex("deadbeef");
+
+    byte[] associatedData =
+        AeadSelfSignedBundleBackupSealer.buildAssociatedData(certBytes, attestationBytes);
+
+    byte[] expected =
+        hex.parseHex(
+            "00000001" // ASSOCIATED_DATA_VERSION = 1
+                + "00000002" // certBytes.length = 2
+                + "feed" // certBytes
+                + "00000004" // attestationBytes.length = 4
+                + "deadbeef" // attestationBytes
+            );
+    assertArrayEquals(expected, associatedData);
   }
 }

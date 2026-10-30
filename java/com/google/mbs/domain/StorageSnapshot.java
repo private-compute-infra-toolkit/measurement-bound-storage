@@ -16,8 +16,6 @@
 
 package com.google.mbs.domain;
 
-import java.util.Map;
-
 /**
  * Point-in-time view of backup storage, keyed by epoch for self-signed bundle backups and by {@link
  * CrossSignedCertificateId} for cross-signed certificate backups.
@@ -33,9 +31,6 @@ public interface StorageSnapshot {
    */
   SelfSignedBundleBackupHandle getSelfSignedBundleBackupHandle(int epoch);
 
-  /** Returns the handles of the epochs present in storage when the snapshot was taken. */
-  Map<Integer, SelfSignedBundleBackupHandle> selfSignedBundleBackupHandles();
-
   /**
    * Returns the handle for the cross-signed certificate {@code id}, or a {@link
    * CrossSignedCertificateBackupHandle.Empty} if nothing was stored for it when the snapshot was
@@ -43,11 +38,4 @@ public interface StorageSnapshot {
    */
   CrossSignedCertificateBackupHandle getCrossSignedCertificateBackupHandle(
       CrossSignedCertificateId id);
-
-  /**
-   * Returns the handles of the cross-signed certificates present in storage when the snapshot was
-   * taken.
-   */
-  Map<CrossSignedCertificateId, CrossSignedCertificateBackupHandle>
-      crossSignedCertificateBackupHandles();
 }

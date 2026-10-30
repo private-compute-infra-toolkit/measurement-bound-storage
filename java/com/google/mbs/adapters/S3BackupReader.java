@@ -18,7 +18,6 @@ package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.mbs.domain.BackupAccessFailedException;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupIncompleteException;
 import com.google.mbs.domain.BackupNotFoundException;
 import com.google.mbs.domain.BackupPartiallyWrittenException;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
@@ -22,16 +22,8 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.MbsCertificateFactory.MbsCertificateFactoryException;
-import com.google.mbs.MbsCertificateFactory.X509CertificateAndPrivateKey;
-import com.google.mbs.domain.AttestationCollector;
-import com.google.mbs.domain.AttestationToken;
-import com.google.mbs.domain.KmsException;
-import com.google.mbs.domain.SelfSignedBundle;
-import com.google.mbs.domain.SelfSignedBundleBackup;
-import com.google.mbs.domain.SelfSignedBundleBackupSealer;
-import com.google.mbs.domain.SelfSignedCertificate;
-import com.google.mbs.domain.ValidityPeriod;
+import com.google.mbs.domain.SelfSignedCertificateFactory.SelfSignedCertificateFactoryException;
+import com.google.mbs.domain.SelfSignedCertificateFactory.X509CertificateAndPrivateKey;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -63,7 +55,7 @@ public class SelfSignedBundleBackupGeneratorTest {
           "priv-key".getBytes(StandardCharsets.UTF_8),
           "attestation-doc".getBytes(StandardCharsets.UTF_8));
 
-  @Mock private MbsCertificateFactory certificateFactory;
+  @Mock private SelfSignedCertificateFactory certificateFactory;
   @Mock private AttestationCollector attestationCollector;
   @Mock private SelfSignedBundleBackupSealer backupSealer;
   @Mock private X509Certificate certificate;
@@ -104,9 +96,11 @@ public class SelfSignedBundleBackupGeneratorTest {
   @Test
   public void generate_certificateGenerationFails_propagatesException() {
     when(certificateFactory.generate(CERT_CONFIG))
-        .thenThrow(new MbsCertificateFactoryException("Keygen failed", new RuntimeException()));
+        .thenThrow(
+            new SelfSignedCertificateFactoryException("Keygen failed", new RuntimeException()));
 
-    assertThrows(MbsCertificateFactoryException.class, () -> generator.generate(CERT_CONFIG));
+    assertThrows(
+        SelfSignedCertificateFactoryException.class, () -> generator.generate(CERT_CONFIG));
     verifyNoInteractions(attestationCollector, backupSealer);
   }
 

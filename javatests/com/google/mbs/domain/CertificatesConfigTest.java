@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
-import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.CrossSignedCertificate;
-import com.google.mbs.domain.CrossSignedCertificateId;
-import com.google.mbs.domain.SelfSignedCertificate;
-import com.google.mbs.domain.ValidityPeriod;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
@@ -196,6 +191,7 @@ public class CertificatesConfigTest {
             .setActiveCrossSignedCertificateIds(Set.of(cross12.id(), cross01.id()))
             .build();
 
+    assertThat(config.getCrossSignedCertificates()).containsExactly(cross01, cross10, cross12);
     assertThat(config.activeCrossSignedCertificates()).containsExactly(cross01, cross12);
   }
 

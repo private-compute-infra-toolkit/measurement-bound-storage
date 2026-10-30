@@ -14,38 +14,16 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.flogger.FluentLogger;
-import com.google.mbs.domain.BackupAccessFailedException;
-import com.google.mbs.domain.BackupCorruptedException;
-import com.google.mbs.domain.BackupIncompleteException;
-import com.google.mbs.domain.BackupNotFoundException;
-import com.google.mbs.domain.BackupPartiallyWrittenException;
-import com.google.mbs.domain.BackupStorage;
-import com.google.mbs.domain.BackupStorageException;
-import com.google.mbs.domain.CertificateCodec;
-import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.CrossSignedCertificate;
-import com.google.mbs.domain.CrossSignedCertificateBackup;
-import com.google.mbs.domain.CrossSignedCertificateBackupHandle;
-import com.google.mbs.domain.KmsException;
-import com.google.mbs.domain.Metrics;
-import com.google.mbs.domain.SelfSignedBundle;
-import com.google.mbs.domain.SelfSignedBundleBackup;
-import com.google.mbs.domain.SelfSignedBundleBackupHandle;
-import com.google.mbs.domain.SelfSignedBundleBackupSealer;
-import com.google.mbs.domain.SelfSignedCertificate;
-import com.google.mbs.domain.StorageSnapshot;
-import com.google.mbs.domain.TrustPackage;
-import com.google.mbs.domain.TrustPackageProvider;
-import com.google.mbs.domain.TrustPackageReloader;
 import jakarta.inject.Inject;
+import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,10 +49,10 @@ public class TrustPackageService implements TrustPackageProvider, TrustPackageRe
 
   private record ActiveTrustState(
       Map<Integer, LoadedSelfSignedBundle> selfSignedBundlesByEpoch,
-      List<X509Certificate> crossSignedCertificates) {
+      Map<CrossSignedCertificateId, X509Certificate> crossSignedCertificatesById) {
     private ActiveTrustState {
-      selfSignedBundlesByEpoch = Map.copyOf(selfSignedBundlesByEpoch);
-      crossSignedCertificates = List.copyOf(crossSignedCertificates);
+      selfSignedBundlesByEpoch = Collections.unmodifiableMap(selfSignedBundlesByEpoch);
+      crossSignedCertificatesById = Collections.unmodifiableMap(crossSignedCertificatesById);
     }
   }
 
@@ -102,13 +80,16 @@ public class TrustPackageService implements TrustPackageProvider, TrustPackageRe
         state.selfSignedBundlesByEpoch().values().stream()
             .map(LoadedSelfSignedBundle::bundle)
             .toList();
-    return new TrustPackage(selfSignedBundles, state.crossSignedCertificates());
+    List<X509Certificate> crossSignedCertificates =
+        List.copyOf(state.crossSignedCertificatesById().values());
+    return new TrustPackage(selfSignedBundles, crossSignedCertificates);
   }
 
   @Override
   public synchronized void reload(CertificatesConfig config) {
     try {
       reloadTrustPackageWithRetryOnTransientError(config);
+      recordActiveCertificatesMetrics();
       metrics.recordLoadEvent(Metrics.LoadEvent.SUCCESS);
     } catch (Exception failure) {
       metrics.recordLoadEvent(mapFailureToEvent(failure));
@@ -119,6 +100,12 @@ public class TrustPackageService implements TrustPackageProvider, TrustPackageRe
       }
       throw new RuntimeException("Failed to reload trust package", failure);
     }
+  }
+
+  private void recordActiveCertificatesMetrics() {
+    ActiveTrustState state = activeTrustState.get();
+    metrics.recordActiveSelfSignedCertificates(state.selfSignedBundlesByEpoch().keySet());
+    metrics.recordActiveCrossSignedCertificates(state.crossSignedCertificatesById().keySet());
   }
 
   private void reloadTrustPackageWithRetryOnTransientError(CertificatesConfig config)
@@ -138,7 +125,8 @@ public class TrustPackageService implements TrustPackageProvider, TrustPackageRe
     StorageSnapshot snapshot = storage.getSnapshot();
     Map<Integer, LoadedSelfSignedBundle> nextBundles =
         loadActiveSelfSignedBundles(snapshot, config);
-    List<X509Certificate> nextCrossSigned = loadActiveCrossSignedCertificates(snapshot, config);
+    Map<CrossSignedCertificateId, X509Certificate> nextCrossSigned =
+        loadActiveCrossSignedCertificates(snapshot, config);
     activeTrustState.set(new ActiveTrustState(nextBundles, nextCrossSigned));
   }
 
@@ -148,39 +136,73 @@ public class TrustPackageService implements TrustPackageProvider, TrustPackageRe
     ActiveTrustState previousState = activeTrustState.get();
     Map<Integer, LoadedSelfSignedBundle> previouslyLoaded =
         previousState != null ? previousState.selfSignedBundlesByEpoch() : Map.of();
-    Map<Integer, LoadedSelfSignedBundle> nextLoaded = new HashMap<>();
+    Map<Integer, LoadedSelfSignedBundle> nextLoaded = new LinkedHashMap<>();
 
     for (SelfSignedCertificate certConfig : config.activeSelfSignedCertificates()) {
       int epochId = certConfig.epochId();
-      SelfSignedBundleBackup backup =
-          snapshot
-              .getSelfSignedBundleBackupHandle(epochId)
-              .expect(SelfSignedBundleBackupHandle.Complete.class)
-              .read();
+      SelfSignedBundleBackup backup = readSelfSignedBundleBackup(snapshot, epochId);
       nextLoaded.put(
           epochId, useLoadedOrLoadSelfSignedBundle(previouslyLoaded.get(epochId), backup));
     }
     return nextLoaded;
   }
 
-  private List<X509Certificate> loadActiveCrossSignedCertificates(
+  private Map<CrossSignedCertificateId, X509Certificate> loadActiveCrossSignedCertificates(
       StorageSnapshot snapshot, CertificatesConfig config)
-      throws BackupCorruptedException, BackupStorageException {
-    List<X509Certificate> crossSignedCertificates = new ArrayList<>();
+      throws BackupCorruptedException, KmsException, BackupStorageException {
+    Map<CrossSignedCertificateId, X509Certificate> crossSignedCertificates = new LinkedHashMap<>();
     for (CrossSignedCertificate crossCertConfig : config.activeCrossSignedCertificates()) {
-      CrossSignedCertificateBackup backup =
-          snapshot
-              .getCrossSignedCertificateBackupHandle(crossCertConfig.id())
-              .expect(CrossSignedCertificateBackupHandle.Complete.class)
-              .read();
-      // Parsing X.509 is local (no KMS call), so no need to cache decoded certs across reloads.
-      try {
-        crossSignedCertificates.add(certificateCodec.toCertificate(backup.certBytes()));
-      } catch (IllegalArgumentException e) {
-        throw new BackupCorruptedException("Certificate could not be decoded", e);
-      }
+      crossSignedCertificates.put(
+          crossCertConfig.id(), loadCrossSignedCertificate(snapshot, crossCertConfig));
     }
     return crossSignedCertificates;
+  }
+
+  private X509Certificate loadCrossSignedCertificate(
+      StorageSnapshot snapshot, CrossSignedCertificate crossCertConfig)
+      throws BackupCorruptedException, KmsException, BackupStorageException {
+    CrossSignedCertificateBackup backup =
+        snapshot
+            .getCrossSignedCertificateBackupHandle(crossCertConfig.id())
+            .expect(CrossSignedCertificateBackupHandle.Complete.class)
+            .read();
+    X509Certificate crossCert;
+    try {
+      crossCert = certificateCodec.toCertificate(backup.certBytes());
+    } catch (IllegalArgumentException e) {
+      throw new BackupCorruptedException("Certificate could not be decoded", e);
+    }
+    SelfSignedBundle signer =
+        backupSealer.unseal(
+            readSelfSignedBundleBackup(snapshot, crossCertConfig.privateKeyEpochId()));
+    SelfSignedBundle subject =
+        backupSealer.unseal(
+            readSelfSignedBundleBackup(snapshot, crossCertConfig.publicKeyEpochId()));
+    verifyCrossSignedCertificate(crossCert, signer.certificate(), subject.certificate());
+    return crossCert;
+  }
+
+  private static void verifyCrossSignedCertificate(
+      X509Certificate crossCert, X509Certificate signerCert, X509Certificate subjectCert)
+      throws BackupCorruptedException {
+    if (!crossCert.getPublicKey().equals(subjectCert.getPublicKey())) {
+      throw new BackupCorruptedException(
+          "Cross-signed certificate public key does not match subject certificate");
+    }
+    try {
+      crossCert.verify(signerCert.getPublicKey());
+    } catch (GeneralSecurityException e) {
+      throw new BackupCorruptedException(
+          "Cross-signed certificate signature verification failed", e);
+    }
+  }
+
+  private static SelfSignedBundleBackup readSelfSignedBundleBackup(
+      StorageSnapshot snapshot, int epochId) throws BackupStorageException {
+    return snapshot
+        .getSelfSignedBundleBackupHandle(epochId)
+        .expect(SelfSignedBundleBackupHandle.Complete.class)
+        .read();
   }
 
   private LoadedSelfSignedBundle useLoadedOrLoadSelfSignedBundle(

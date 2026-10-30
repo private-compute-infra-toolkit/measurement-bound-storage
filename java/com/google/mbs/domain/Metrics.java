@@ -16,6 +16,8 @@
 
 package com.google.mbs.domain;
 
+import java.util.Set;
+
 /** Port for reporting metrics from MBS library. */
 public interface Metrics {
   enum MbsEvent {
@@ -54,4 +56,8 @@ public interface Metrics {
   }
 
   void recordConfigEvent(ConfigEvent event);
+
+  void recordActiveSelfSignedCertificates(Set<Integer> epochIds);
+
+  void recordActiveCrossSignedCertificates(Set<CrossSignedCertificateId> certificateIds);
 }

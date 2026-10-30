@@ -26,7 +26,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.CertificatesConfigBucketProperties;
 import com.google.mbs.domain.InvalidCertificatesConfigException;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.Metrics.ConfigEvent;

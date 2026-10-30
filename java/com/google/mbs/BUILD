@@ -12,44 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_java//java:defs.bzl", "java_library", "java_plugin")
+load("@rules_java//java:defs.bzl", "java_library")
 
 package(default_visibility = ["//visibility:public"])
-
-java_plugin(
-    name = "auto_value_plugin",
-    processor_class = "com.google.auto.value.processor.AutoValueProcessor",
-    deps = ["@maven//:com_google_auto_value_auto_value"],
-)
-
-java_library(
-    name = "certmanagement",
-    srcs = [
-        "BackupBucketPropertiesFactory.java",
-        "DefaultCertificateGenerator.java",
-        "MbsCertificateFactory.java",
-        "SelfSignedBundleBackupGenerator.java",
-        "TrustPackageService.java",
-    ],
-    plugins = [":auto_value_plugin"],
-    exports = [
-        "//java/com/google/mbs/domain",
-        "//java/com/google/mbs/qualifier",
-    ],
-    runtime_deps = [
-        "@maven//:com_google_flogger_flogger_system_backend",
-    ],
-    deps = [
-        "//java/com/google/mbs/domain",
-        "//java/com/google/mbs/qualifier",
-        "@maven//:com_google_auto_value_auto_value_annotations",
-        "@maven//:com_google_flogger_flogger",
-        "@maven//:com_google_guava_guava",
-        "@maven//:jakarta_inject_jakarta_inject_api",
-        "@maven//:org_bouncycastle_bcpkix_jdk18on",
-        "@maven//:org_bouncycastle_bcprov_jdk18on",
-    ],
-)
 
 alias(
     name = "dummy_cert_provider",
@@ -64,10 +29,10 @@ java_library(
         "MbsModule.java",
     ],
     deps = [
-        ":certmanagement",
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/adapters/nsm",
         "//java/com/google/mbs/domain",
+        "//java/com/google/mbs/qualifier",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_inject_guice",
         "@maven//:jakarta_inject_jakarta_inject_api",
@@ -81,9 +46,9 @@ java_library(
 java_library(
     name = "mbs",
     exports = [
-        ":certmanagement",
         ":module",
         "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
         "//java/com/google/mbs/qualifier",
     ],
 )

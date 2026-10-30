@@ -23,9 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.BackupBucketPropertiesFactory;
 import com.google.mbs.domain.BackupAccessFailedException;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupIncompleteException;
 import com.google.mbs.domain.BackupNotFoundException;
 import com.google.mbs.domain.BackupPartiallyWrittenException;

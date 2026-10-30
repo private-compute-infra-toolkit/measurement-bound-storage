@@ -25,10 +25,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.BackupBucketPropertiesFactory;
 import com.google.mbs.domain.BackupAccessFailedException;
 import com.google.mbs.domain.BackupAlreadyExistsException;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupStorageAlreadyLockedException;
 import com.google.mbs.domain.CrossSignedCertificateBackup;
 import com.google.mbs.domain.CrossSignedCertificateId;

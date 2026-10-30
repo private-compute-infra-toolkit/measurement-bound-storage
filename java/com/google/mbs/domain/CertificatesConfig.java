@@ -98,14 +98,23 @@ public record CertificatesConfig(
         "crossSignedCertificates");
   }
 
-  /** Returns all configured {@link SelfSignedCertificate}s ordered by ascending epoch ID. */
+  /** Returns all configured {@link SelfSignedCertificate}s. */
   public List<SelfSignedCertificate> getSelfSignedCertificates() {
     return selfSignedCertificates.values().stream()
         .sorted(Comparator.comparingInt(SelfSignedCertificate::epochId))
         .toList();
   }
 
-  /** Returns active {@link SelfSignedCertificate}s ordered by ascending epoch ID. */
+  /** Returns all configured {@link CrossSignedCertificate}s. */
+  public List<CrossSignedCertificate> getCrossSignedCertificates() {
+    return crossSignedCertificates.values().stream()
+        .sorted(
+            Comparator.comparingInt(CrossSignedCertificate::privateKeyEpochId)
+                .thenComparingInt(CrossSignedCertificate::publicKeyEpochId))
+        .toList();
+  }
+
+  /** Returns active {@link SelfSignedCertificate}s. */
   public List<SelfSignedCertificate> activeSelfSignedCertificates() {
     return activeSelfSignedCertificateIds.stream()
         .sorted()
@@ -113,10 +122,7 @@ public record CertificatesConfig(
         .toList();
   }
 
-  /**
-   * Returns active {@link CrossSignedCertificate}s ordered by ascending {@link
-   * CrossSignedCertificateId}.
-   */
+  /** Returns active {@link CrossSignedCertificate}s. */
   public List<CrossSignedCertificate> activeCrossSignedCertificates() {
     return activeCrossSignedCertificateIds.stream()
         .sorted(

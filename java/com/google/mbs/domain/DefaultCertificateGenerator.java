@@ -14,21 +14,10 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.flogger.FluentLogger;
-import com.google.mbs.domain.BackupAccessFailedException;
-import com.google.mbs.domain.BackupStorage;
-import com.google.mbs.domain.BackupStorageAlreadyLockedException;
-import com.google.mbs.domain.BackupStorageException;
-import com.google.mbs.domain.CertificateGenerator;
-import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.KmsException;
-import com.google.mbs.domain.Metrics;
-import com.google.mbs.domain.SelfSignedBundleBackupHandle;
-import com.google.mbs.domain.SelfSignedCertificate;
-import com.google.mbs.domain.StorageSnapshot;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.List;
@@ -42,22 +31,26 @@ public class DefaultCertificateGenerator implements CertificateGenerator {
 
   private final BackupStorage storage;
   private final SelfSignedBundleBackupGenerator selfSignedBundleBackupGenerator;
+  private final CrossSignedCertificateBackupGenerator crossSignedCertificateBackupGenerator;
   private final Metrics metrics;
 
   @Inject
   DefaultCertificateGenerator(
       BackupStorage storage,
       SelfSignedBundleBackupGenerator selfSignedBundleBackupGenerator,
+      CrossSignedCertificateBackupGenerator crossSignedCertificateBackupGenerator,
       Metrics metrics) {
     this.storage = Objects.requireNonNull(storage);
     this.selfSignedBundleBackupGenerator = Objects.requireNonNull(selfSignedBundleBackupGenerator);
+    this.crossSignedCertificateBackupGenerator =
+        Objects.requireNonNull(crossSignedCertificateBackupGenerator);
     this.metrics = Objects.requireNonNull(metrics);
   }
 
   @Override
   public void generateCertificates(CertificatesConfig config) {
     try {
-      generateMissingSelfSignedBundleBackupsWithRetryOnTransientError(config);
+      generateMissingBackupsWithRetryOnTransientError(config);
       metrics.recordGenerationEvent(Metrics.GenerationEvent.SUCCESS);
     } catch (Exception failure) {
       metrics.recordGenerationEvent(mapFailureToEvent(failure));
@@ -69,38 +62,72 @@ public class DefaultCertificateGenerator implements CertificateGenerator {
     }
   }
 
-  private void generateMissingSelfSignedBundleBackupsWithRetryOnTransientError(
-      CertificatesConfig config)
+  private void generateMissingBackupsWithRetryOnTransientError(CertificatesConfig config)
       throws InterruptedException,
           KmsException,
           BackupStorageAlreadyLockedException,
-          BackupStorageException {
+          BackupStorageException,
+          BackupCorruptedException {
     try {
-      generateMissingSelfSignedBundleBackups(config);
+      generateMissingBackups(config);
     } catch (BackupStorageAlreadyLockedException transientState) {
       logger.atWarning().withCause(transientState).log(
           "Transient backup state, retrying in %d ms", retryBackoff.toMillis());
       Thread.sleep(retryBackoff.toMillis());
-      generateMissingSelfSignedBundleBackups(config);
+      generateMissingBackups(config);
     }
   }
 
-  private void generateMissingSelfSignedBundleBackups(CertificatesConfig config)
-      throws KmsException, BackupStorageAlreadyLockedException, BackupStorageException {
-    if (findMissingSelfSignedBundleBackups(config, storage.getSnapshot()).isEmpty()) {
+  private void generateMissingBackups(CertificatesConfig config)
+      throws KmsException,
+          BackupStorageAlreadyLockedException,
+          BackupStorageException,
+          BackupCorruptedException {
+    StorageSnapshot snapshot = storage.getSnapshot();
+    if (findMissingSelfSignedBundleBackups(config, snapshot).isEmpty()
+        && findMissingCrossSignedCertificateBackups(config, snapshot).isEmpty()) {
       return;
     }
+    // Intentionally no try/finally: a failure under the lock leaves the backup in an unknown state,
+    // so the lock stays behind until an operator has investigated and removed it by hand.
     storage.acquireLock();
+    generateMissingSelfSignedBundleBackups(config);
+    generateMissingCrossSignedCertificateBackups(config);
+    storage.releaseLock();
+  }
+
+  private void generateMissingSelfSignedBundleBackups(CertificatesConfig config)
+      throws KmsException, BackupStorageException {
     List<SelfSignedBundleBackupHandle.Empty> missingSelfSignedBundleBackups =
         findMissingSelfSignedBundleBackups(config, storage.getSnapshot());
 
-    // Intentionally no try/finally: a failure under the lock leaves the backup in an unknown state,
-    // so the lock stays behind until an operator has investigated and removed it by hand.
     for (SelfSignedBundleBackupHandle.Empty empty : missingSelfSignedBundleBackups) {
       SelfSignedCertificate certConfig = config.selfSignedCertificates().get(empty.epoch());
       empty.write(selfSignedBundleBackupGenerator.generate(certConfig));
     }
-    storage.releaseLock();
+  }
+
+  private void generateMissingCrossSignedCertificateBackups(CertificatesConfig config)
+      throws KmsException, BackupStorageException, BackupCorruptedException {
+    StorageSnapshot snapshot = storage.getSnapshot();
+    List<CrossSignedCertificateBackupHandle.Empty> missingCrossSignedCertificateBackups =
+        findMissingCrossSignedCertificateBackups(config, snapshot);
+
+    for (CrossSignedCertificateBackupHandle.Empty empty : missingCrossSignedCertificateBackups) {
+      CrossSignedCertificate certConfig = config.crossSignedCertificates().get(empty.id());
+      SelfSignedBundleBackup signerBackup =
+          snapshot
+              .getSelfSignedBundleBackupHandle(certConfig.privateKeyEpochId())
+              .expect(SelfSignedBundleBackupHandle.Complete.class)
+              .read();
+      SelfSignedBundleBackup subjectBackup =
+          snapshot
+              .getSelfSignedBundleBackupHandle(certConfig.publicKeyEpochId())
+              .expect(SelfSignedBundleBackupHandle.Complete.class)
+              .read();
+      empty.write(
+          crossSignedCertificateBackupGenerator.generate(certConfig, signerBackup, subjectBackup));
+    }
   }
 
   private static List<SelfSignedBundleBackupHandle.Empty> findMissingSelfSignedBundleBackups(
@@ -116,6 +143,21 @@ public class DefaultCertificateGenerator implements CertificateGenerator {
                 logger.atWarning().log(
                     "Skipping certificate generation for epoch %d in state %s",
                     certConfig.epochId(), handle.getClass().getSimpleName());
+              }
+            })
+        .toList();
+  }
+
+  private static List<CrossSignedCertificateBackupHandle.Empty>
+      findMissingCrossSignedCertificateBackups(
+          CertificatesConfig config, StorageSnapshot snapshot) {
+    return config.getCrossSignedCertificates().stream()
+        .<CrossSignedCertificateBackupHandle.Empty>mapMulti(
+            (certConfig, consumer) -> {
+              CrossSignedCertificateBackupHandle handle =
+                  snapshot.getCrossSignedCertificateBackupHandle(certConfig.id());
+              if (handle instanceof CrossSignedCertificateBackupHandle.Empty empty) {
+                consumer.accept(empty);
               }
             })
         .toList();

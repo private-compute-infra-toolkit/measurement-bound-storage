@@ -122,7 +122,11 @@ public class AeadSelfSignedBundleBackupSealer implements SelfSignedBundleBackupS
     return new SelfSignedBundle(certificate, privateKey, token);
   }
 
-  private static byte[] buildAssociatedData(byte[] certBytes, byte[] attestationDocBytes) {
+  @VisibleForTesting
+  public static byte[] buildAssociatedData(byte[] certBytes, byte[] attestationDocBytes) {
+    // Modifying the associated data format will break decryption of keys encrypted with this
+    // associated data format. If changes are needed, create new format and support both for
+    // decryption.
     return ByteBuffer.allocate(3 * Integer.BYTES + certBytes.length + attestationDocBytes.length)
         .putInt(ASSOCIATED_DATA_VERSION)
         .putInt(certBytes.length)

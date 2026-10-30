@@ -30,6 +30,9 @@ import com.google.inject.Injector;
 import com.google.mbs.adapters.AeadSelfSignedBundleBackupSealer;
 import com.google.mbs.adapters.AwsAttestationCollector;
 import com.google.mbs.adapters.AwsKmsClient;
+import com.google.mbs.adapters.BackupBucketProperties;
+import com.google.mbs.adapters.CertificatesConfigBucketProperties;
+import com.google.mbs.adapters.DefaultCrossSignedCertificateBackupGenerator;
 import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
 import com.google.mbs.adapters.PemCertificateCodec;
 import com.google.mbs.adapters.S3BackupPaths;
@@ -38,22 +41,24 @@ import com.google.mbs.adapters.ScheduledCertificateMonitor;
 import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
 import com.google.mbs.domain.AttestationCollector;
-import com.google.mbs.domain.BackupBucketProperties;
 import com.google.mbs.domain.BackupStorage;
 import com.google.mbs.domain.CertificateCodec;
 import com.google.mbs.domain.CertificateGenerator;
 import com.google.mbs.domain.CertificateMonitor;
 import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.CertificatesConfigBucketProperties;
 import com.google.mbs.domain.CertificatesConfigProvider;
+import com.google.mbs.domain.CrossSignedCertificateBackupGenerator;
+import com.google.mbs.domain.DefaultCertificateGenerator;
 import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.SelfSignedBundle;
 import com.google.mbs.domain.SelfSignedBundleBackupSealer;
 import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
 import com.google.mbs.domain.TrustPackageReloader;
+import com.google.mbs.domain.TrustPackageService;
 import com.google.mbs.domain.ValidityPeriod;
 import com.google.mbs.dummy.DummyMbsModule;
 import com.google.mbs.dummy.DummyTrustPackageProvider;
@@ -177,7 +182,8 @@ public class MbsModuleTest {
                     .annotatedWith(InstanceId.class)
                     .toInstance("i-1234567890abcdef0");
                 bind(byte[].class).annotatedWith(AttestationUserData.class).toInstance(new byte[0]);
-                bind(MbsCertificateFactory.class).toInstance(mock(MbsCertificateFactory.class));
+                bind(SelfSignedCertificateFactory.class)
+                    .toInstance(mock(SelfSignedCertificateFactory.class));
                 bind(Metrics.class).toInstance(mock(Metrics.class));
               }
             });
@@ -202,6 +208,11 @@ public class MbsModuleTest {
         injector.getInstance(SelfSignedBundleBackupSealer.class);
     assertNotNull(backupSealer);
     assertTrue(backupSealer instanceof AeadSelfSignedBundleBackupSealer);
+
+    CrossSignedCertificateBackupGenerator crossSignedGenerator =
+        injector.getInstance(CrossSignedCertificateBackupGenerator.class);
+    assertNotNull(crossSignedGenerator);
+    assertTrue(crossSignedGenerator instanceof DefaultCrossSignedCertificateBackupGenerator);
 
     BackupBucketProperties bucketProps = injector.getInstance(BackupBucketProperties.class);
     assertNotNull(bucketProps);

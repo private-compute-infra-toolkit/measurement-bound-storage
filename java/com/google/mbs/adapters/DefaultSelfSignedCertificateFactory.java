@@ -14,22 +14,28 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.adapters;
 
 import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.domain.ValidityPeriod;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
+import org.bouncycastle.asn1.ASN1String;
+import org.bouncycastle.asn1.DERUTF8String;
+import org.bouncycastle.asn1.x500.AttributeTypeAndValue;
+import org.bouncycastle.asn1.x500.RDN;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralNames;
@@ -43,67 +49,85 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
-/** Strategy for generating X.509 certificates and KeyPairs. */
-@FunctionalInterface
-public interface MbsCertificateFactory {
+/**
+ * Default BouncyCastle implementation of {@link SelfSignedCertificateFactory}.
+ *
+ * <p>The configured {@code subjectName} must contain a single, single-valued Common Name ({@code
+ * CN}) RDN, which will be suffixed with {@code " G<epochId>"} (e.g., {@code CN=MBS Root G0}) when
+ * generating a certificate.
+ */
+public final class DefaultSelfSignedCertificateFactory implements SelfSignedCertificateFactory {
 
-  record X509CertificateAndPrivateKey(X509Certificate certificate, PrivateKey privateKey) {
-    public X509CertificateAndPrivateKey {
-      Objects.requireNonNull(certificate);
-      Objects.requireNonNull(privateKey);
-    }
-  }
-
-  record CertSignatureSpec(String keyAlgorithm, int keySize, String signatureAlgorithm) {
+  /** Specification for the key algorithm, key size, and signature algorithm of generated certs. */
+  public record CertSignatureSpec(String keyAlgorithm, int keySize, String signatureAlgorithm) {
     public CertSignatureSpec {
       Objects.requireNonNull(keyAlgorithm);
       Objects.requireNonNull(signatureAlgorithm);
     }
   }
 
-  class MbsCertificateFactoryException extends RuntimeException {
-    public MbsCertificateFactoryException(String message, Throwable cause) {
-      super(message, cause);
-    }
-  }
+  private final CertSignatureSpec certSignatureSpec;
+  private final X500Name subjectName;
+  private final Optional<GeneralNames> subjectAlternativeNames;
+  private final int keyUsageMask;
 
-  /**
-   * Generates a certificate and private key.
-   *
-   * @param params parameters for the self-signed certificate.
-   * @return A bundle containing the certificate and private key.
-   * @throws RuntimeException if generation fails.
-   */
-  X509CertificateAndPrivateKey generate(SelfSignedCertificate params);
-
-  /** Returns a factory for self-signed certificates with specified parameters. */
-  static MbsCertificateFactory createSelfSignedCertificatesFactory(
+  public DefaultSelfSignedCertificateFactory(
       CertSignatureSpec certSignatureSpec,
       X500Name subjectName,
       Optional<GeneralNames> subjectAlternativeNames,
       int keyUsageMask) {
-    Objects.requireNonNull(certSignatureSpec);
-    Objects.requireNonNull(subjectName);
-    Objects.requireNonNull(subjectAlternativeNames);
-    return params -> {
-      try {
-        KeyPairGenerator keyGen = KeyPairGenerator.getInstance(certSignatureSpec.keyAlgorithm());
-        keyGen.initialize(certSignatureSpec.keySize());
-        KeyPair keyPair = keyGen.generateKeyPair();
+    this.certSignatureSpec = Objects.requireNonNull(certSignatureSpec);
+    this.subjectName = validateSubjectName(subjectName);
+    this.subjectAlternativeNames = Objects.requireNonNull(subjectAlternativeNames);
+    this.keyUsageMask = keyUsageMask;
+  }
 
-        X509Certificate cert =
-            generateCertificate(
-                keyPair,
-                subjectName,
-                params.validityPeriod(),
-                subjectAlternativeNames,
-                keyUsageMask,
-                certSignatureSpec.signatureAlgorithm());
-        return new X509CertificateAndPrivateKey(cert, keyPair.getPrivate());
-      } catch (Exception e) {
-        throw new MbsCertificateFactoryException("Failed to generate self-signed certificate", e);
+  @Override
+  public X509CertificateAndPrivateKey generate(SelfSignedCertificate params) {
+    Objects.requireNonNull(params);
+    try {
+      KeyPairGenerator keyGen = KeyPairGenerator.getInstance(certSignatureSpec.keyAlgorithm());
+      keyGen.initialize(certSignatureSpec.keySize());
+      KeyPair keyPair = keyGen.generateKeyPair();
+
+      X509Certificate cert =
+          generateCertificate(
+              keyPair,
+              withEpochInCn(subjectName, params.epochId()),
+              params.validityPeriod(),
+              subjectAlternativeNames,
+              keyUsageMask,
+              certSignatureSpec.signatureAlgorithm());
+      return new X509CertificateAndPrivateKey(cert, keyPair.getPrivate());
+    } catch (Exception e) {
+      throw new SelfSignedCertificateFactoryException(
+          "Failed to generate self-signed certificate", e);
+    }
+  }
+
+  private static X500Name validateSubjectName(X500Name subjectName) {
+    RDN[] cnRdns = subjectName.getRDNs(BCStyle.CN);
+    if (cnRdns.length != 1
+        || cnRdns[0].isMultiValued()
+        || !(cnRdns[0].getFirst().getValue() instanceof ASN1String)) {
+      throw new IllegalArgumentException(
+          "subjectName must contain exactly one single-valued CN RDN: " + subjectName);
+    }
+    return subjectName;
+  }
+
+  private static X500Name withEpochInCn(X500Name baseName, int epochId) {
+    X500NameBuilder builder = new X500NameBuilder(BCStyle.INSTANCE);
+    for (RDN rdn : baseName.getRDNs()) {
+      AttributeTypeAndValue first = rdn.getFirst();
+      if (BCStyle.CN.equals(first.getType())) {
+        String commonName = ((ASN1String) first.getValue()).getString();
+        builder.addRDN(BCStyle.CN, new DERUTF8String(commonName + " G" + epochId));
+      } else {
+        builder.addMultiValuedRDN(rdn.getTypesAndValues());
       }
-    };
+    }
+    return builder.build();
   }
 
   private static X509Certificate generateCertificate(
@@ -144,15 +168,11 @@ public interface MbsCertificateFactory {
     }
 
     if (subjectAlternativeNames.isPresent()) {
-      // RFC 5280 requires SAN to be critical if subject is empty.
-      // Note that RFC 5280 Section 4.1.2.6 strictly forbids empty subjects for CA certificates.
-      // Additionally, while RFC 5280 allows empty subjects for non-CA certs (with critical SAN),
-      // Java's default provider rejects certificates with empty issuer DNs. Since this factory
-      // generates self-signed certificates (issuer == subject), passing an empty subject will
-      // fail during parsing in Java regardless of the CA flag.
-      boolean critical = subjectName.getRDNs().length == 0;
+      // Since CN RDN is present, the DN is not empty. As per RFC 5280 Section 4.2.1.6, the SAN
+      // should be non-critical.
+      boolean isCritical = false;
       certBuilder.addExtension(
-          Extension.subjectAlternativeName, critical, subjectAlternativeNames.get());
+          Extension.subjectAlternativeName, isCritical, subjectAlternativeNames.get());
     }
 
     ContentSigner signer = new JcaContentSignerBuilder(sigAlg).build(keyPair.getPrivate());

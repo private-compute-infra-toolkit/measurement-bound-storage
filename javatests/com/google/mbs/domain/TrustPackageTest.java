@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
-import com.google.mbs.domain.AttestationToken;
-import com.google.mbs.domain.SelfSignedBundle;
-import com.google.mbs.domain.TrustPackage;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;

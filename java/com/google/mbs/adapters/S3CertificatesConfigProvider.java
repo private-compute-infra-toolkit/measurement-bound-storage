@@ -18,7 +18,6 @@ package com.google.mbs.adapters;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.mbs.domain.CertificatesConfig;
-import com.google.mbs.domain.CertificatesConfigBucketProperties;
 import com.google.mbs.domain.CertificatesConfigProvider;
 import com.google.mbs.domain.InvalidCertificatesConfigException;
 import com.google.mbs.domain.Metrics;

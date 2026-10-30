@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.adapters;
 
 import static org.junit.Assert.assertEquals;
 
-import com.google.mbs.domain.BackupBucketProperties;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;

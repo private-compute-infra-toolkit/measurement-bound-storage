@@ -14,16 +14,11 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.domain;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
-import com.google.mbs.domain.BackupAlreadyExistsException;
-import com.google.mbs.domain.BackupNotFoundException;
-import com.google.mbs.domain.CrossSignedCertificateBackup;
-import com.google.mbs.domain.CrossSignedCertificateBackupHandle;
-import com.google.mbs.domain.CrossSignedCertificateId;
 import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 import org.junit.runner.RunWith;

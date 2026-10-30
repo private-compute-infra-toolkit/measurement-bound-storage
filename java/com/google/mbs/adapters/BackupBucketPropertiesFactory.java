@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.adapters;
 
-import com.google.mbs.domain.BackupBucketProperties;
 import java.util.Objects;
 
 public class BackupBucketPropertiesFactory {

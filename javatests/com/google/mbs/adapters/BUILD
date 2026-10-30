@@ -42,11 +42,37 @@ java_test(
 )
 
 java_test(
+    name = "DefaultSelfSignedCertificateFactoryTest",
+    size = "small",
+    srcs = ["DefaultSelfSignedCertificateFactoryTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+    ],
+)
+
+java_test(
+    name = "DefaultCrossSignedCertificateBackupGeneratorTest",
+    size = "small",
+    srcs = ["DefaultCrossSignedCertificateBackupGeneratorTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "//java/com/google/mbs/domain",
+        "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
+        "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
     name = "S3BackupStorageTest",
     size = "small",
     srcs = ["S3BackupStorageTest.java"],
     deps = [
-        "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
         "@maven//:com_google_guava_guava",
@@ -125,7 +151,6 @@ java_test(
     size = "small",
     srcs = ["S3BackupReaderTest.java"],
     deps = [
-        "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
         "@maven//:com_google_truth_truth",
@@ -141,7 +166,6 @@ java_test(
     size = "small",
     srcs = ["S3BackupWriterTest.java"],
     deps = [
-        "//java/com/google/mbs:certmanagement",
         "//java/com/google/mbs/adapters",
         "//java/com/google/mbs/domain",
         "@maven//:com_google_truth_truth",
@@ -241,5 +265,15 @@ java_test(
         "//java/com/google/mbs/domain",
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
+    ],
+)
+
+java_test(
+    name = "BackupBucketPropertiesFactoryTest",
+    size = "small",
+    srcs = ["BackupBucketPropertiesFactoryTest.java"],
+    deps = [
+        "//java/com/google/mbs/adapters",
+        "@maven//:junit_junit",
     ],
 )

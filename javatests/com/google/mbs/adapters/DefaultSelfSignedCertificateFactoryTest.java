@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
-package com.google.mbs;
+package com.google.mbs.adapters;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
+import com.google.mbs.adapters.DefaultSelfSignedCertificateFactory.CertSignatureSpec;
 import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.domain.ValidityPeriod;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.Security;
 import java.security.cert.X509Certificate;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -35,6 +38,7 @@ import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.BeforeClass;
@@ -43,7 +47,10 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public class MbsCertificateFactoryTest {
+public class DefaultSelfSignedCertificateFactoryTest {
+
+  private static final CertSignatureSpec RSA_2048 =
+      new CertSignatureSpec("RSA", 2048, "SHA256withRSA");
 
   @BeforeClass
   public static void setUpClass() {
@@ -70,19 +77,16 @@ public class MbsCertificateFactoryTest {
 
   @Test
   public void generateSelfSigned_createsValidLeafCert() throws Exception {
-    String subjectName = "CN=Test Service";
     int expectedKeyUsageMask = KeyUsage.digitalSignature;
-    MbsCertificateFactory.CertSignatureSpec spec =
-        new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
-    MbsCertificateFactory factory =
-        MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec, new X500Name(subjectName), Optional.empty(), expectedKeyUsageMask);
+    SelfSignedCertificateFactory factory =
+        new DefaultSelfSignedCertificateFactory(
+            RSA_2048, new X500Name("CN=Test Service"), Optional.empty(), expectedKeyUsageMask);
     SelfSignedCertificate params = defaultParams();
     X509Certificate cert = factory.generate(params).certificate();
 
     assertNotNull(cert);
-    assertEquals("CN=Test Service", cert.getSubjectX500Principal().getName());
-    assertEquals("CN=Test Service", cert.getIssuerX500Principal().getName());
+    assertEquals("CN=Test Service G0", cert.getSubjectX500Principal().getName());
+    assertEquals("CN=Test Service G0", cert.getIssuerX500Principal().getName());
     assertEquals(params.validityPeriod().notBefore(), cert.getNotBefore().toInstant());
     assertEquals(params.validityPeriod().notAfter(), cert.getNotAfter().toInstant());
     cert.verify(cert.getPublicKey());
@@ -101,12 +105,10 @@ public class MbsCertificateFactoryTest {
 
   @Test
   public void generateSelfSigned_createsValidRootCaCert() throws Exception {
-    MbsCertificateFactory.CertSignatureSpec spec =
-        new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
     int expectedKeyUsageMask = KeyUsage.keyCertSign | KeyUsage.nonRepudiation;
-    MbsCertificateFactory factory =
-        MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec, new X500Name("CN=Test CA"), Optional.empty(), expectedKeyUsageMask);
+    SelfSignedCertificateFactory factory =
+        new DefaultSelfSignedCertificateFactory(
+            RSA_2048, new X500Name("CN=Test CA"), Optional.empty(), expectedKeyUsageMask);
     X509Certificate cert = factory.generate(defaultParams()).certificate();
 
     assertNotNull(cert);
@@ -130,14 +132,14 @@ public class MbsCertificateFactoryTest {
     GeneralName san = new GeneralName(GeneralName.uniformResourceIdentifier, uri);
     GeneralNames sans = new GeneralNames(san);
 
-    MbsCertificateFactory.CertSignatureSpec spec =
-        new MbsCertificateFactory.CertSignatureSpec("RSA", 2048, "SHA256withRSA");
-    MbsCertificateFactory factory =
-        MbsCertificateFactory.createSelfSignedCertificatesFactory(
-            spec, new X500Name("CN=Test"), Optional.of(sans), KeyUsage.digitalSignature);
+    SelfSignedCertificateFactory factory =
+        new DefaultSelfSignedCertificateFactory(
+            RSA_2048, new X500Name("CN=Test"), Optional.of(sans), KeyUsage.digitalSignature);
     X509Certificate cert = factory.generate(defaultParams()).certificate();
 
     assertNotNull(cert);
+    assertTrue(
+        cert.getNonCriticalExtensionOIDs().contains(Extension.subjectAlternativeName.getId()));
     var subjectAlternativeNames = cert.getSubjectAlternativeNames();
     assertNotNull(subjectAlternativeNames);
     assertEquals(1, subjectAlternativeNames.size());
@@ -146,9 +148,43 @@ public class MbsCertificateFactoryTest {
     assertEquals(uri, firstSan.get(1));
   }
 
-  private static KeyPair generateKeyPair() throws Exception {
-    KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-    keyPairGenerator.initialize(2048);
-    return keyPairGenerator.generateKeyPair();
+  @Test
+  public void constructor_invalidSubjectName_throwsIllegalArgumentException() {
+    List<X500Name> invalidSubjects =
+        List.of(
+            new X500Name(""),
+            new X500Name("C=US, O=Google LLC"),
+            new X500Name("CN=Root 1, CN=Root 2"),
+            new X500Name("CN=Root+OU=Unit"));
+
+    for (X500Name invalidSubject : invalidSubjects) {
+      assertThrows(
+          "Expected IllegalArgumentException for subjectName: " + invalidSubject,
+          IllegalArgumentException.class,
+          () ->
+              new DefaultSelfSignedCertificateFactory(
+                  RSA_2048, invalidSubject, Optional.empty(), KeyUsage.keyCertSign));
+    }
+  }
+
+  @Test
+  public void generateSelfSigned_multiRdnSubject_preservesRdnOrderAndSuffixesCnWithEpoch()
+      throws Exception {
+    SelfSignedCertificate params = new SelfSignedCertificate(777, defaultParams().validityPeriod());
+    for (String cn : List.of("MBS Root", "\\#MBS\\, Root\\+CA\\\\\\ ")) {
+      SelfSignedCertificateFactory factory =
+          new DefaultSelfSignedCertificateFactory(
+              RSA_2048,
+              new X500Name("C=US, O=Google LLC, CN=" + cn + ", OU=PCIT"),
+              Optional.empty(),
+              KeyUsage.keyCertSign);
+
+      X509Certificate cert = factory.generate(params).certificate();
+
+      X500Name expectedDn = new X500Name("C=US, O=Google LLC, CN=" + cn + " G777, OU=PCIT");
+      JcaX509CertificateHolder holder = new JcaX509CertificateHolder(cert);
+      assertEquals(expectedDn, holder.getSubject());
+      assertEquals(expectedDn, holder.getIssuer());
+    }
   }
 }
