@@ -22,11 +22,12 @@ import java.util.List;
 /**
  * Container holding lists of active self-signed bundles and cross-signed certificates.
  *
- * @param selfSignedBundles list of active self-signed bundles
+ * @param selfSignedBundles active self-signed bundles with their epochs
  * @param crossSignedCertificates list of cross-signed X.509 certificates
  */
 public record TrustPackage(
-    List<SelfSignedBundle> selfSignedBundles, List<X509Certificate> crossSignedCertificates) {
+    List<SelfSignedBundleWithEpoch> selfSignedBundles,
+    List<X509Certificate> crossSignedCertificates) {
 
   public TrustPackage {
     selfSignedBundles = List.copyOf(selfSignedBundles);

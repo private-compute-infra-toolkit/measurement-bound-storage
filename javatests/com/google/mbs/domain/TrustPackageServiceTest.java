@@ -152,7 +152,7 @@ public class TrustPackageServiceTest {
     TrustPackage trustPackage = trustPackageService.getActiveTrustPackage();
     assertEquals(1, trustPackage.selfSignedBundles().size());
     assertTrue(trustPackage.crossSignedCertificates().isEmpty());
-    return trustPackage.selfSignedBundles().get(0);
+    return trustPackage.selfSignedBundles().get(0).bundle();
   }
 
   private record FakeComplete(int epoch, SelfSignedBundleBackup read)
@@ -355,7 +355,10 @@ public class TrustPackageServiceTest {
             .build());
 
     TrustPackage pkg = trustPackageService.getActiveTrustPackage();
-    assertEquals(List.of(bundle0, bundle2), pkg.selfSignedBundles());
+    assertEquals(
+        List.of(
+            new SelfSignedBundleWithEpoch(0, bundle0), new SelfSignedBundleWithEpoch(2, bundle2)),
+        pkg.selfSignedBundles());
     assertTrue(pkg.crossSignedCertificates().isEmpty());
     verify(backupSealer, times(1)).unseal(BACKUP_0);
     verify(backupSealer, never()).unseal(BACKUP_1);
@@ -377,7 +380,8 @@ public class TrustPackageServiceTest {
         CertificatesConfig.builder().setSelfSignedCertificates(selfSignedCerts(0, 2));
 
     trustPackageService.reload(configBuilder.setActiveSelfSignedCertificateIds(Set.of(0)).build());
-    assertSame(bundle0, trustPackageService.getActiveTrustPackage().selfSignedBundles().get(0));
+    assertSame(
+        bundle0, trustPackageService.getActiveTrustPackage().selfSignedBundles().get(0).bundle());
     verify(backupSealer, times(1)).unseal(BACKUP_0);
     verify(backupSealer, never()).unseal(BACKUP_2);
     verify(mockMetrics).recordActiveSelfSignedCertificates(Set.of(0));
@@ -386,7 +390,10 @@ public class TrustPackageServiceTest {
     trustPackageService.reload(
         configBuilder.setActiveSelfSignedCertificateIds(Set.of(0, 2)).build());
     TrustPackage pkg0And2 = trustPackageService.getActiveTrustPackage();
-    assertEquals(List.of(bundle0, bundle2), pkg0And2.selfSignedBundles());
+    assertEquals(
+        List.of(
+            new SelfSignedBundleWithEpoch(0, bundle0), new SelfSignedBundleWithEpoch(2, bundle2)),
+        pkg0And2.selfSignedBundles());
     verify(backupSealer, times(1)).unseal(BACKUP_0);
     verify(backupSealer, times(1)).unseal(BACKUP_2);
     verify(mockMetrics).recordActiveSelfSignedCertificates(Set.of(0, 2));
@@ -395,7 +402,8 @@ public class TrustPackageServiceTest {
     trustPackageService.reload(configBuilder.setActiveSelfSignedCertificateIds(Set.of(2)).build());
     TrustPackage pkg2 = trustPackageService.getActiveTrustPackage();
     assertEquals(1, pkg2.selfSignedBundles().size());
-    assertSame(bundle2, pkg2.selfSignedBundles().get(0));
+    assertEquals(2, pkg2.selfSignedBundles().get(0).epochId());
+    assertSame(bundle2, pkg2.selfSignedBundles().get(0).bundle());
     verify(backupSealer, times(1)).unseal(BACKUP_2);
     verify(mockMetrics).recordActiveSelfSignedCertificates(Set.of(2));
   }
@@ -424,8 +432,8 @@ public class TrustPackageServiceTest {
     verify(mockMetrics, times(1)).recordActiveSelfSignedCertificates(any());
     assertEquals(initialPackage, trustPackageService.getActiveTrustPackage());
     assertSame(
-        initialPackage.selfSignedBundles().get(0),
-        trustPackageService.getActiveTrustPackage().selfSignedBundles().get(0));
+        initialPackage.selfSignedBundles().get(0).bundle(),
+        trustPackageService.getActiveTrustPackage().selfSignedBundles().get(0).bundle());
   }
 
   @Test
@@ -461,26 +469,94 @@ public class TrustPackageServiceTest {
         .unseal(BACKUP_0); // unsealed for self-signed + id01 signer + id10 subject
     verify(backupSealer, times(2)).unseal(BACKUP_1); // unsealed for id01 subject + id10 signer
     verify(backupSealer, never()).unseal(BACKUP_2);
-    verify(cross01Cert).verify(key0);
-    verify(cross10Cert).verify(key1);
+    verify(cross01Cert, times(1)).verify(key0);
+    verify(cross10Cert, times(1)).verify(key1);
     verify(mockMetrics).recordLoadEvent(Metrics.LoadEvent.SUCCESS);
     verify(mockMetrics).recordActiveCrossSignedCertificates(Set.of(id01, id10));
 
+    // Keeping id01 active while replacing id10 with id12 reuses cached id01 without re-unsealing.
     trustPackageService.reload(
-        configBuilder.setActiveCrossSignedCertificateIds(Set.of(id12)).build());
+        configBuilder.setActiveCrossSignedCertificateIds(Set.of(id01, id12)).build());
     TrustPackage pkg2 = trustPackageService.getActiveTrustPackage();
-    assertEquals(List.of(cross12Cert), pkg2.crossSignedCertificates());
+    assertEquals(List.of(cross01Cert, cross12Cert), pkg2.crossSignedCertificates());
     verify(backupSealer, times(3)).unseal(BACKUP_0);
     verify(backupSealer, times(3)).unseal(BACKUP_1); // +1 unseal for id12 signer
     verify(backupSealer, times(1)).unseal(BACKUP_2); // unsealed for id12 subject
-    verify(cross12Cert).verify(key1);
+    verify(cross01Cert, times(1)).verify(key0);
+    verify(cross12Cert, times(1)).verify(key1);
+    verify(mockMetrics).recordActiveCrossSignedCertificates(Set.of(id01, id12));
+
+    // Deactivating id01 keeps only id12 active and reuses its cached certificate without
+    // re-unsealing.
+    trustPackageService.reload(
+        configBuilder.setActiveCrossSignedCertificateIds(Set.of(id12)).build());
+    TrustPackage pkg3 = trustPackageService.getActiveTrustPackage();
+    assertEquals(List.of(cross12Cert), pkg3.crossSignedCertificates());
+    verify(backupSealer, times(3)).unseal(BACKUP_0);
+    verify(backupSealer, times(3)).unseal(BACKUP_1);
+    verify(backupSealer, times(1)).unseal(BACKUP_2);
+    verify(cross12Cert, times(1)).verify(key1);
     verify(mockMetrics).recordActiveCrossSignedCertificates(Set.of(id12));
 
     trustPackageService.reload(configBuilder.setActiveCrossSignedCertificateIds(Set.of()).build());
-    TrustPackage pkg3 = trustPackageService.getActiveTrustPackage();
-    assertTrue(pkg3.crossSignedCertificates().isEmpty());
+    TrustPackage pkg4 = trustPackageService.getActiveTrustPackage();
+    assertTrue(pkg4.crossSignedCertificates().isEmpty());
     verify(mockMetrics).recordActiveCrossSignedCertificates(Set.of());
-    verify(mockMetrics, times(3)).recordActiveSelfSignedCertificates(Set.of(0));
+    verify(mockMetrics, times(4)).recordActiveSelfSignedCertificates(Set.of(0));
+  }
+
+  @Test
+  public void reload_unchangedCrossSignedCertificate_skipsUnsealAndKeepsSameCertificate()
+      throws Exception {
+    CrossSignedCertificateId id01 = new CrossSignedCertificateId(0, 1);
+    PublicKey key0 = bundle0.certificate().getPublicKey();
+    stubCrossSignedStorage(Map.of(id01, completeCrossSignedHandle(id01, CROSS_01_BYTES)));
+    CertificatesConfig config = activeCrossSignedConfig(id01);
+
+    trustPackageService.reload(config);
+    X509Certificate firstCrossCert =
+        trustPackageService.getActiveTrustPackage().crossSignedCertificates().get(0);
+
+    trustPackageService.reload(config);
+    X509Certificate secondCrossCert =
+        trustPackageService.getActiveTrustPackage().crossSignedCertificates().get(0);
+
+    assertSame(cross01Cert, firstCrossCert);
+    assertSame(firstCrossCert, secondCrossCert);
+    verify(certificateCodec, times(1)).toCertificate(CROSS_01_BYTES);
+    verify(backupSealer, times(2)).unseal(BACKUP_0); // self-signed + id01 signer on first reload
+    verify(backupSealer, times(1)).unseal(BACKUP_1); // id01 subject on first reload
+    verify(cross01Cert, times(1)).verify(key0);
+  }
+
+  @Test
+  public void reload_updatesTrustPackageWhenCrossSignedCertificateChangesInStorage()
+      throws Exception {
+    CrossSignedCertificateId id01 = new CrossSignedCertificateId(0, 1);
+    PublicKey key0 = bundle0.certificate().getPublicKey();
+    byte[] updatedCross01Bytes = "cross-01-v2".getBytes(StandardCharsets.UTF_8);
+    X509Certificate updatedCross01Cert = dummyCrossSignedCert(bundle1);
+    when(certificateCodec.toCertificate(updatedCross01Bytes)).thenReturn(updatedCross01Cert);
+
+    stubCrossSignedStorage(Map.of(id01, completeCrossSignedHandle(id01, CROSS_01_BYTES)));
+    CertificatesConfig config = activeCrossSignedConfig(id01);
+
+    trustPackageService.reload(config);
+    assertSame(
+        cross01Cert, trustPackageService.getActiveTrustPackage().crossSignedCertificates().get(0));
+    verify(backupSealer, times(2)).unseal(BACKUP_0);
+    verify(backupSealer, times(1)).unseal(BACKUP_1);
+    verify(cross01Cert, times(1)).verify(key0);
+
+    stubCrossSignedStorage(Map.of(id01, completeCrossSignedHandle(id01, updatedCross01Bytes)));
+
+    trustPackageService.reload(config);
+    assertSame(
+        updatedCross01Cert,
+        trustPackageService.getActiveTrustPackage().crossSignedCertificates().get(0));
+    verify(backupSealer, times(3)).unseal(BACKUP_0); // +1 for id01 signer re-verification
+    verify(backupSealer, times(2)).unseal(BACKUP_1); // +1 for id01 subject re-verification
+    verify(updatedCross01Cert, times(1)).verify(key0);
   }
 
   @Test

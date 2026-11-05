@@ -53,6 +53,7 @@ import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.SelfSignedBundle;
 import com.google.mbs.domain.SelfSignedBundleBackupSealer;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.domain.TrustPackage;
@@ -109,7 +110,8 @@ public class MbsModuleTest {
     assertNotNull(package1);
     assertEquals(1, package1.selfSignedBundles().size());
     assertTrue(package1.crossSignedCertificates().isEmpty());
-    SelfSignedBundle bundle1 = package1.selfSignedBundles().get(0);
+    assertEquals(0, package1.selfSignedBundles().get(0).epochId());
+    SelfSignedBundle bundle1 = package1.selfSignedBundles().get(0).bundle();
     assertNotNull(bundle1.certificate());
     assertNotNull(bundle1.privateKey());
     var expectedValidity = config.selfSignedCertificates().get(0).validityPeriod();
@@ -121,7 +123,7 @@ public class MbsModuleTest {
     assertNotNull(package2);
     assertEquals(1, package2.selfSignedBundles().size());
     assertTrue(package2.crossSignedCertificates().isEmpty());
-    SelfSignedBundle bundle2 = package2.selfSignedBundles().get(0);
+    SelfSignedBundle bundle2 = package2.selfSignedBundles().get(0).bundle();
     assertNotNull(bundle2.certificate());
     assertNotNull(bundle2.privateKey());
     assertNotEquals(
@@ -145,15 +147,16 @@ public class MbsModuleTest {
     reloader.reload(multiEpochConfig);
     TrustPackage multiPackage = provider.getActiveTrustPackage();
     assertEquals(2, multiPackage.selfSignedBundles().size());
-    Set<ValidityPeriod> loadedValidities =
+    Map<Integer, ValidityPeriod> loadedValiditiesByEpoch =
         multiPackage.selfSignedBundles().stream()
-            .map(
-                b ->
-                    new ValidityPeriod(
-                        b.certificate().getNotBefore().toInstant(),
-                        b.certificate().getNotAfter().toInstant()))
-            .collect(Collectors.toSet());
-    assertEquals(Set.of(validity0, validity2), loadedValidities);
+            .collect(
+                Collectors.toMap(
+                    SelfSignedBundleWithEpoch::epochId,
+                    b ->
+                        new ValidityPeriod(
+                            b.bundle().certificate().getNotBefore().toInstant(),
+                            b.bundle().certificate().getNotAfter().toInstant())));
+    assertEquals(Map.of(0, validity0, 2, validity2), loadedValiditiesByEpoch);
 
     CertificateMonitor scheduler = injector.getInstance(CertificateMonitor.class);
     assertNotNull(scheduler);

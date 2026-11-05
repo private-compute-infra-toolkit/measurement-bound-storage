@@ -38,7 +38,7 @@ import com.google.mbs.domain.CrossSignedCertificateId;
 import com.google.mbs.domain.KmsClientInterface;
 import com.google.mbs.domain.Metrics;
 import com.google.mbs.domain.SelfSignedBundle;
-import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
@@ -233,7 +233,7 @@ public class MbsIntegrationTest {
     TrustPackage trustPackage = provider.getActiveTrustPackage();
     assertEquals(1, trustPackage.selfSignedBundles().size());
     assertTrue(trustPackage.crossSignedCertificates().isEmpty());
-    return trustPackage.selfSignedBundles().get(0);
+    return trustPackage.selfSignedBundles().get(0).bundle();
   }
 
   private static String configTextproto(
@@ -294,23 +294,17 @@ public class MbsIntegrationTest {
     assertEquals(config.selfSignedCertificates().size(), trustPackage.selfSignedBundles().size());
     assertTrue(trustPackage.crossSignedCertificates().isEmpty());
 
-    for (SelfSignedBundle bundle : trustPackage.selfSignedBundles()) {
-      assertNotNull(bundle.certificate());
+    for (SelfSignedBundleWithEpoch epochBundle : trustPackage.selfSignedBundles()) {
+      SelfSignedBundle bundle = epochBundle.bundle();
       assertNotNull(bundle.privateKey());
       assertNotNull(bundle.attestationToken());
-    }
-
-    for (SelfSignedCertificate expectedCert : config.selfSignedCertificates().values()) {
-      ValidityPeriod expectedValidity = expectedCert.validityPeriod();
-      String expectedSubject = "CN=Test MBS Root G" + expectedCert.epochId();
-      assertTrue(
-          trustPackage.selfSignedBundles().stream()
-              .map(SelfSignedBundle::certificate)
-              .anyMatch(
-                  cert ->
-                      expectedSubject.equals(cert.getSubjectX500Principal().getName())
-                          && cert.getNotBefore().toInstant().equals(expectedValidity.notBefore())
-                          && cert.getNotAfter().toInstant().equals(expectedValidity.notAfter())));
+      X509Certificate cert = bundle.certificate();
+      ValidityPeriod expectedValidity =
+          config.selfSignedCertificates().get(epochBundle.epochId()).validityPeriod();
+      assertEquals(
+          "CN=Test MBS Root G" + epochBundle.epochId(), cert.getSubjectX500Principal().getName());
+      assertEquals(expectedValidity.notBefore(), cert.getNotBefore().toInstant());
+      assertEquals(expectedValidity.notAfter(), cert.getNotAfter().toInstant());
     }
   }
 
@@ -492,10 +486,13 @@ public class MbsIntegrationTest {
     runMonitorIteration(runningInjector);
     TrustPackage dualActivePackage = runningProvider.getActiveTrustPackage();
     assertEquals(rotationPackage, dualActivePackage);
-    assertTrue(dualActivePackage.selfSignedBundles().contains(epoch0Bundle));
+    assertTrue(
+        dualActivePackage
+            .selfSignedBundles()
+            .contains(new SelfSignedBundleWithEpoch(0, epoch0Bundle)));
     assertTrue(
         dualActivePackage.selfSignedBundles().stream()
-            .anyMatch(b -> b.certificate().equals(epoch1Cert)));
+            .anyMatch(b -> b.epochId() == 1 && b.bundle().certificate().equals(epoch1Cert)));
 
     // 5. Rotation step 2: epoch 0 and cross-signed certs are deactivated, leaving only epoch 1
     s3TestClient.putFile(
@@ -506,6 +503,7 @@ public class MbsIntegrationTest {
 
     SelfSignedBundle activeBundle = singleActiveBundle(runningProvider);
     assertEquals(epoch1Cert, activeBundle.certificate());
+    assertEquals(1, runningProvider.getActiveTrustPackage().selfSignedBundles().get(0).epochId());
 
     // Verify normal operation with new keypair: signing and verifying with Certificate B
     Signature sigB = Signature.getInstance("SHA256withRSA");

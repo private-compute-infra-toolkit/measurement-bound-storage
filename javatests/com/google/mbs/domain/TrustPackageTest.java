@@ -31,16 +31,18 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class TrustPackageTest {
 
-  private static SelfSignedBundle createBundle() {
-    return new SelfSignedBundle(
-        mock(X509Certificate.class),
-        mock(PrivateKey.class),
-        AttestationToken.fromBytes(new byte[0]));
+  private static SelfSignedBundleWithEpoch createBundle(int epochId) {
+    return new SelfSignedBundleWithEpoch(
+        epochId,
+        new SelfSignedBundle(
+            mock(X509Certificate.class),
+            mock(PrivateKey.class),
+            AttestationToken.fromBytes(new byte[0])));
   }
 
   @Test
   public void constructor_storesSelfSignedBundlesAndCrossCertificates() {
-    SelfSignedBundle bundle = createBundle();
+    SelfSignedBundleWithEpoch bundle = createBundle(0);
     X509Certificate x509 = mock(X509Certificate.class);
 
     TrustPackage result = new TrustPackage(List.of(bundle), List.of(x509));
@@ -53,9 +55,9 @@ public class TrustPackageTest {
 
   @Test
   public void constructor_makesDefensiveUnmodifiableCopies() {
-    SelfSignedBundle bundle = createBundle();
+    SelfSignedBundleWithEpoch bundle = createBundle(0);
     X509Certificate x509 = mock(X509Certificate.class);
-    List<SelfSignedBundle> mutableBundles = new ArrayList<>(List.of(bundle));
+    List<SelfSignedBundleWithEpoch> mutableBundles = new ArrayList<>(List.of(bundle));
     List<X509Certificate> mutableCerts = new ArrayList<>(List.of(x509));
 
     TrustPackage result = new TrustPackage(mutableBundles, mutableCerts);

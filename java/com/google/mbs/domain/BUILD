@@ -63,6 +63,7 @@ java_library(
         "SelfSignedBundleBackupGenerator.java",
         "SelfSignedBundleBackupHandle.java",
         "SelfSignedBundleBackupSealer.java",
+        "SelfSignedBundleWithEpoch.java",
         "SelfSignedCertificate.java",
         "SelfSignedCertificateFactory.java",
         "StorageSnapshot.java",

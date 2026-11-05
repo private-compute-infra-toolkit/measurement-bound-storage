@@ -21,6 +21,7 @@ import com.google.mbs.domain.CertificateGenerator;
 import com.google.mbs.domain.CertificatesConfig;
 import com.google.mbs.domain.CertificatesConfigProvider;
 import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.SelfSignedCertificate;
 import com.google.mbs.domain.TrustPackage;
 import com.google.mbs.domain.TrustPackageProvider;
@@ -89,9 +90,11 @@ public class DummyTrustPackageProvider
   @Override
   public synchronized void reload(CertificatesConfig config) {
     try {
-      List<SelfSignedBundle> selfSignedBundles = new ArrayList<>();
+      List<SelfSignedBundleWithEpoch> selfSignedBundles = new ArrayList<>();
       for (SelfSignedCertificate certConfig : config.activeSelfSignedCertificates()) {
-        selfSignedBundles.add(generateSelfSignedBundle(certConfig.validityPeriod()));
+        selfSignedBundles.add(
+            new SelfSignedBundleWithEpoch(
+                certConfig.epochId(), generateSelfSignedBundle(certConfig.validityPeriod())));
       }
       trustPackage = new TrustPackage(selfSignedBundles, List.of());
     } catch (Exception e) {
