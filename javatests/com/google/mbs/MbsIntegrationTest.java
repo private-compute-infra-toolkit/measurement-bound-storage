@@ -58,7 +58,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -342,22 +341,17 @@ public class MbsIntegrationTest {
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
   }
 
-  // TODO: remove when all envs deploy the config file
   @Test
-  public void runOneIteration_missingConfig_fallsBackToHardcodedDefaultConfigAndGenerates() {
+  public void runOneIteration_missingConfig_doesNotGenerateOrLoadCertificates() {
     s3TestClient.deleteFile(PUBLIC_BUCKET, S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH);
     Injector injector = createTestInjector();
     TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
 
     runMonitorIteration(injector);
 
-    SelfSignedBundle bundle = singleActiveBundle(provider);
-    assertEquals(
-        Instant.parse("2026-10-01T00:00:00Z"), bundle.certificate().getNotBefore().toInstant());
-    assertEquals(
-        Instant.parse("2027-02-02T13:00:00Z"), bundle.certificate().getNotAfter().toInstant());
-    assertTrue(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
-    assertFalse(s3TestClient.fileExists(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(1)));
+    assertTrue(s3TestClient.listFiles(PUBLIC_BUCKET).isEmpty());
+    assertTrue(s3TestClient.listFiles(PRIVATE_BUCKET).isEmpty());
+    assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
   }
 
   @Test
@@ -563,20 +557,14 @@ public class MbsIntegrationTest {
   }
 
   @Test
-  public void runOneIteration_invalidConfigUpdate_fallsBackToDefaultConfigAndServesDefaultEpoch()
-      throws Exception {
+  public void runOneIteration_invalidConfigUpdate_retainsPreviousTrustPackage() {
     Injector injector = createTestInjector("i-running-invalid-cfg", "CN=Initial MBS Root");
     TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
 
     runMonitorIteration(injector);
-    assertEquals(2, provider.getActiveTrustPackage().selfSignedBundles().size());
-    X509Certificate epoch0Cert =
-        new PemCertificateCodec()
-            .toCertificate(s3TestClient.getFile(PUBLIC_BUCKET, S3BackupPaths.getRootCertPath(0)));
+    TrustPackage initialPackage = provider.getActiveTrustPackage();
+    assertEquals(2, initialPackage.selfSignedBundles().size());
 
-    // DefaultingCertificatesConfigProvider catches InvalidCertificatesConfigException from
-    // S3CertificatesConfigProvider and substitutes DEFAULT_CONFIG (epoch 0), so the monitor
-    // iteration still succeeds while serving epoch 0.
     s3TestClient.putFile(
         PUBLIC_BUCKET,
         S3BackupPaths.CERTIFICATES_CONFIG_FILE_PATH,
@@ -584,7 +572,7 @@ public class MbsIntegrationTest {
 
     runMonitorIteration(injector);
 
-    assertEquals(epoch0Cert, singleActiveBundle(provider).certificate());
+    assertEquals(initialPackage, provider.getActiveTrustPackage());
   }
 
   @Test

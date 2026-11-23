@@ -24,7 +24,6 @@ import com.google.mbs.adapters.BackupBucketProperties;
 import com.google.mbs.adapters.BackupBucketPropertiesFactory;
 import com.google.mbs.adapters.CertificatesConfigBucketProperties;
 import com.google.mbs.adapters.DefaultCrossSignedCertificateBackupGenerator;
-import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
 import com.google.mbs.adapters.PemCertificateCodec;
 import com.google.mbs.adapters.S3BackupPaths;
 import com.google.mbs.adapters.S3BackupStorage;
@@ -70,6 +69,9 @@ final class MbsCoreModule extends AbstractModule {
     requireBinding(Metrics.class);
 
     bind(BackupStorage.class).to(S3BackupStorage.class).in(Singleton.class);
+    bind(CertificatesConfigProvider.class)
+        .to(S3CertificatesConfigProvider.class)
+        .in(Singleton.class);
     bind(CertificateCodec.class).to(PemCertificateCodec.class);
     bind(SelfSignedBundleBackupSealer.class).to(AeadSelfSignedBundleBackupSealer.class);
     bind(CrossSignedCertificateBackupGenerator.class)
@@ -82,15 +84,6 @@ final class MbsCoreModule extends AbstractModule {
     bind(TrustPackageReloader.class).to(TrustPackageService.class);
 
     bind(CertificateMonitor.class).to(ScheduledCertificateMonitor.class).in(Singleton.class);
-  }
-
-  // TODO: bind S3CertificatesConfigProvider directly once certificates_config.textproto is
-  // deployed in all environments.
-  @Provides
-  @Singleton
-  CertificatesConfigProvider provideCertificatesConfigProvider(
-      S3CertificatesConfigProvider s3CertificatesConfigProvider) {
-    return new DefaultingCertificatesConfigProvider(s3CertificatesConfigProvider);
   }
 
   @Provides

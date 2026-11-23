@@ -257,18 +257,6 @@ java_test(
 )
 
 java_test(
-    name = "DefaultingCertificatesConfigProviderTest",
-    size = "small",
-    srcs = ["DefaultingCertificatesConfigProviderTest.java"],
-    deps = [
-        "//java/com/google/mbs/adapters",
-        "//java/com/google/mbs/domain",
-        "@maven//:junit_junit",
-        "@maven//:org_mockito_mockito_core",
-    ],
-)
-
-java_test(
     name = "BackupBucketPropertiesFactoryTest",
     size = "small",
     srcs = ["BackupBucketPropertiesFactoryTest.java"],

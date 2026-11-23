@@ -28,7 +28,6 @@ java_library(
         "CertificatesConfigMapper.java",
         "DefaultCrossSignedCertificateBackupGenerator.java",
         "DefaultSelfSignedCertificateFactory.java",
-        "DefaultingCertificatesConfigProvider.java",
         "PemCertificateCodec.java",
         "S3BackupPaths.java",
         "S3BackupReader.java",

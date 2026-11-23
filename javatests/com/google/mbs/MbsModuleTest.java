@@ -33,10 +33,10 @@ import com.google.mbs.adapters.AwsKmsClient;
 import com.google.mbs.adapters.BackupBucketProperties;
 import com.google.mbs.adapters.CertificatesConfigBucketProperties;
 import com.google.mbs.adapters.DefaultCrossSignedCertificateBackupGenerator;
-import com.google.mbs.adapters.DefaultingCertificatesConfigProvider;
 import com.google.mbs.adapters.PemCertificateCodec;
 import com.google.mbs.adapters.S3BackupPaths;
 import com.google.mbs.adapters.S3BackupStorage;
+import com.google.mbs.adapters.S3CertificatesConfigProvider;
 import com.google.mbs.adapters.ScheduledCertificateMonitor;
 import com.google.mbs.adapters.nsm.DefaultNitroSecurityModuleFactory;
 import com.google.mbs.adapters.nsm.NitroSecurityModuleFactory;
@@ -234,7 +234,7 @@ public class MbsModuleTest {
         injector.getInstance(CertificatesConfigProvider.class);
     assertNotNull(configProvider1);
     assertSame(configProvider1, configProvider2);
-    assertTrue(configProvider1 instanceof DefaultingCertificatesConfigProvider);
+    assertTrue(configProvider1 instanceof S3CertificatesConfigProvider);
 
     BackupStorage storage1 = injector.getInstance(BackupStorage.class);
     BackupStorage storage2 = injector.getInstance(BackupStorage.class);

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.16.0 (2026-11-23)
+
+
+### Features
+
+* remove DefaultingCertificatesConfigProvider
+
 ## 0.15.0 (2026-11-05)
 
 
